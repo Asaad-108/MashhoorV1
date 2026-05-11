@@ -3,20 +3,20 @@ import connectDB from "./config/database";
 import { User } from "./models/User";
 import { InfluencerProfile } from "./models/InfluencerProfile";
 
-const API_KEY = "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
+const API_KEY = process.env.YOUTUBE_API_KEY;
 const CATEGORIES = ["Gaming", "Politics", "Tech", "Fashion", "Music", "Cricket"];
 const CHANNELS_PER_CATEGORY = 10;
 const MIN_SUBS = 20000;
 const MAX_SUBS = 500000;
 
 const mapCategoryToNiche = (category: string) => {
-    switch(category) {
+    switch (category) {
         case "Fashion": return "Fashion";
         case "Tech": return "Tech";
         case "Gaming": return "Gaming";
         case "Music": return "Entertainment";
         case "Cricket": return "Cricket";
-        case "Politics": return "Politics"; 
+        case "Politics": return "Politics";
         default: return "Entertainment";
     }
 };
@@ -59,7 +59,7 @@ async function fetchChannelsByCategory(category: string) {
 
                         if (subs > MIN_SUBS && subs < MAX_SUBS) {
                             const avatarUrl = channelData.snippet.thumbnails?.high?.url || channelData.snippet.thumbnails?.default?.url;
-                            
+
                             // Require a profile picture
                             if (!avatarUrl) continue;
 
@@ -72,7 +72,7 @@ async function fetchChannelsByCategory(category: string) {
                             // STRICT KEYWORD FILTERING
                             const title = (channelData.snippet.title || "").toLowerCase();
                             const desc = (channelData.snippet.description || "").toLowerCase();
-                            
+
                             let keywords: string[] = [];
                             if (category === "Gaming") keywords = ["gaming", "game", "esports", "play", "gamer", "stream"];
                             else if (category === "Politics") keywords = ["politics", "news", "politic", "debate", "government", "policy"];
@@ -80,7 +80,7 @@ async function fetchChannelsByCategory(category: string) {
                             else if (category === "Fashion") keywords = ["fashion", "style", "beauty", "clothing", "apparel", "makeup", "wear"];
                             else if (category === "Music") keywords = ["music", "song", "singer", "records", "album", "artist"];
                             else if (category === "Cricket") keywords = ["cricket", "sports", "match", "icc", "pcb", "bat", "ball"];
-                            
+
                             const isRelevant = keywords.some(kw => title.includes(kw) || desc.includes(kw));
                             if (!isRelevant) {
                                 console.log(`Skipped ${channelData.snippet.title} - Irrelevant for ${category}`);
@@ -89,7 +89,7 @@ async function fetchChannelsByCategory(category: string) {
 
                             const email = `${channelData.id.toLowerCase()}@youtube.test`;
                             const userExists = await User.exists({ email });
-                            
+
                             if (!userExists) {
                                 validChannels.push({
                                     Category: category,
@@ -131,10 +131,10 @@ export async function seedData() {
 
         for (const category of CATEGORIES) {
             const channels = await fetchChannelsByCategory(category);
-            
+
             for (const channel of channels) {
                 const email = `${channel.ID.toLowerCase()}@youtube.test`;
-                
+
                 // Create user
                 let user = await User.findOne({ email });
                 if (!user) {
@@ -147,7 +147,7 @@ export async function seedData() {
                         isVerified: true
                     });
                 }
-                
+
                 // Create profile
                 let profile = await InfluencerProfile.findOne({ user: user._id });
                 if (!profile) {
@@ -179,7 +179,7 @@ export async function seedData() {
                 }
             }
         }
-        
+
         console.log("Seeding complete!");
     } catch (err) {
         console.error("Error seeding", err);
