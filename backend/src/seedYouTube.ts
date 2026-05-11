@@ -3,7 +3,7 @@ import connectDB from "./config/database";
 import { User } from "./models/User";
 import { InfluencerProfile } from "./models/InfluencerProfile";
 
-const API_KEY = process.env.YOUTUBE_API_KEY;
+const API_KEY = "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
 const CATEGORIES = ["Gaming", "Politics", "Tech", "Fashion", "Music", "Cricket"];
 const CHANNELS_PER_CATEGORY = 10;
 const MIN_SUBS = 20000;
