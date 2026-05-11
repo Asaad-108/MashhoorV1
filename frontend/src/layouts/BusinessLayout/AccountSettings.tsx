@@ -1,14 +1,65 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { authApi } from "../../api";
+import { useNavigate } from "react-router-dom";
+
 function AccountSettings() {
+  const { user, updateUser, logout } = useAuth();
+  const navigate = useNavigate();
+
   const [toggles, setToggles] = useState({
-    email: true,
     campaigns: true,
     messages: true,
-    marketing: false,
   });
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      const parts = user.name.split(" ");
+      setFirstName(parts[0] || "");
+      setLastName(parts.slice(1).join(" ") || "");
+      setEmail(user.email || "");
+      setPhone(user.phone || "");
+    }
+  }, [user]);
 
   const handleToggle = (key: keyof typeof toggles) => {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const showToast = (text: string, type: "success" | "error") => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+      const updatedUser = await authApi.updateProfile({
+        name: fullName,
+        email,
+        phone,
+      });
+      updateUser(updatedUser);
+      showToast("Profile updated successfully!", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.response?.data?.message || "Failed to update profile", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   return (
@@ -30,7 +81,8 @@ function AccountSettings() {
                 <label className="settings-label">First Name</label>
                 <input
                   type="text"
-                  defaultValue="John"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
                   className="settings-input"
                 />
               </div>
@@ -38,7 +90,8 @@ function AccountSettings() {
                 <label className="settings-label">Last Name</label>
                 <input
                   type="text"
-                  defaultValue="Doe"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
                   className="settings-input"
                 />
               </div>
@@ -48,7 +101,8 @@ function AccountSettings() {
               <label className="settings-label">Email Address</label>
               <input
                 type="email"
-                defaultValue="john@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="settings-input"
               />
             </div>
@@ -57,8 +111,10 @@ function AccountSettings() {
               <label className="settings-label">Phone Number</label>
               <input
                 type="tel"
-                defaultValue="+971 50 123 4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 className="settings-input"
+                placeholder="+971 50 123 4567"
               />
             </div>
           </div>
@@ -118,23 +174,6 @@ function AccountSettings() {
             <div className="toggle-row">
               <div>
                 <div className="font-medium text-gray-900">
-                  Email Notifications
-                </div>
-                <div className="text-sm text-gray-500">
-                  Receive updates via email
-                </div>
-              </div>
-              <div
-                className={`toggle-switch ${toggles.email ? "active" : ""}`}
-                onClick={() => handleToggle("email")}
-              >
-                <div className="toggle-circle"></div>
-              </div>
-            </div>
-
-            <div className="toggle-row">
-              <div>
-                <div className="font-medium text-gray-900">
                   Campaign Updates
                 </div>
                 <div className="text-sm text-gray-500">
@@ -163,23 +202,6 @@ function AccountSettings() {
                 <div className="toggle-circle"></div>
               </div>
             </div>
-
-            <div className="toggle-row">
-              <div>
-                <div className="font-medium text-gray-900">
-                  Marketing Emails
-                </div>
-                <div className="text-sm text-gray-500">
-                  Receive promotional content and updates
-                </div>
-              </div>
-              <div
-                className={`toggle-switch ${toggles.marketing ? "active" : ""}`}
-                onClick={() => handleToggle("marketing")}
-              >
-                <div className="toggle-circle"></div>
-              </div>
-            </div>
           </div>
 
           <div className="danger-card">
@@ -191,12 +213,38 @@ function AccountSettings() {
             </button>
           </div>
 
-          <button className="btn-save-primary">
-            <img src="/src/assets/save.svg" alt="Save" width={20} height={20} />
-            Save All Changes
-          </button>
+          <div className="flex flex-col gap-4 mt-8">
+            <button className="btn-save-primary" onClick={handleSave} disabled={isSaving}>
+              <img src="/src/assets/save.svg" alt="Save" width={20} height={20} />
+              {isSaving ? "Saving..." : "Save All Changes"}
+            </button>
+            <button 
+              onClick={handleLogout} 
+              className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-colors border border-red-200"
+            >
+              Log Out
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 transform transition-all duration-300 ${
+          toast.type === "success" ? "bg-gray-900 text-green-400" : "bg-red-600 text-white"
+        }`}>
+          {toast.type === "success" ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          <span className="font-medium text-sm text-white">{toast.text}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ type InfluencerCardProps = {
   followers: string;
   engagement: string;
   trustScore: number;
+  onContact?: () => void;
 };
 
 function InfluencerCard({
@@ -20,6 +21,7 @@ function InfluencerCard({
   followers,
   engagement,
   trustScore,
+  onContact,
 }: InfluencerCardProps) {
   const navigate = useNavigate();
 
@@ -74,7 +76,7 @@ function InfluencerCard({
 
       <div className="flex gap-3 mt-auto">
         <button className="btn-card-view" onClick={() => navigate(`/influencer/${id}`)}>View Profile</button>
-        <button className="btn-card-contact">Contact</button>
+        <button className="btn-card-contact" onClick={onContact}>Contact</button>
       </div>
     </div>
   );

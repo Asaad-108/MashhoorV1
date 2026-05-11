@@ -246,61 +246,6 @@ function Settings() {
           </div>
         </div>
 
-        <div className="bg-white max-w-4xl mx-auto border border-gray-200 rounded-xl p-8 mb-6 shadow-sm">
-          <h2 className="text-lg font-medium text-gray-900 mb-6">
-            Pricing & Availability
-          </h2>
-
-          <div className="grid grid-cols-2 gap-6 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Instagram Post Rate (Rs)
-              </label>
-              <input
-                type="number"
-                placeholder="e.g. 15000"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-purple-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Story Rate (Rs)
-              </label>
-              <input
-                type="number"
-                placeholder="e.g. 5000"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-purple-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Current Availability
-            </label>
-            <div className="relative">
-              <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 appearance-none focus:outline-none focus:border-purple-500">
-                <option>Available for collaborations</option>
-                <option>Fully Booked</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M19 9l-7 7-7-7"
-                  ></path>
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div className="bg-white max-w-4xl mx-auto border border-gray-200 rounded-xl p-8 mb-8 shadow-sm">
           <h2 className="text-lg font-medium text-gray-900 mb-6">
@@ -333,6 +278,15 @@ function Settings() {
               />
             </div>
           </div>
+        </div>
+
+        <div className="danger-card max-w-4xl mx-auto mb-8">
+          <h2 className="danger-text">Danger Zone</h2>
+
+          <button className="btn-danger-outline">Deactivate Account</button>
+          <button className="btn-danger-outline">
+            Delete Account Permanently
+          </button>
         </div>
 
         <div className="max-w-4xl mx-auto flex flex-col gap-4">

@@ -8,6 +8,7 @@ export type AuthUser = {
   email: string;
   role: UserRole;
   avatar?: string;
+  phone?: string;
   isVerified: boolean;
 };
 
@@ -44,6 +45,11 @@ export const authApi = {
 
   getMe: async (): Promise<AuthUser> => {
     const { data } = await api.get("/auth/me");
+    return data.data.user;
+  },
+
+  updateProfile: async (payload: { name?: string; email?: string; phone?: string }): Promise<AuthUser> => {
+    const { data } = await api.put("/auth/profile", payload);
     return data.data.user;
   },
 };

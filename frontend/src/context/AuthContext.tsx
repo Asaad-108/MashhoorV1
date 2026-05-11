@@ -6,6 +6,7 @@ interface AuthContextType {
   login: (email: string, password: string, role: UserRole) => Promise<void>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => void;
+  updateUser: (user: AuthUser) => void;
   isAuthenticated: boolean;
 }
 
@@ -41,8 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("mashhoor_refresh_token");
   };
 
+  const updateUser = (updatedUser: AuthUser) => {
+    setUser(updatedUser);
+    localStorage.setItem("mashhoor_user", JSON.stringify(updatedUser));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, register, logout, updateUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
