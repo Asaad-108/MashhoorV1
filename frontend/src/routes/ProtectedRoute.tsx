@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRole: "business" | "influencer";
+  allowedRole: "business" | "influencer" | "admin";
 }
 
 function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
@@ -15,16 +15,12 @@ function ProtectedRoute({ children, allowedRole }: ProtectedRouteProps) {
 
   if (user?.role !== allowedRole) {
     // Redirect to their own dashboard if they're logged in as wrong role
-    return (
-      <Navigate
-        to={
-          user?.role === "business"
-            ? "/business-dashboard"
-            : "/influencer-dashboard"
-        }
-        replace
-      />
-    );
+    let redirectPath = "/";
+    if (user?.role === "business") redirectPath = "/business-dashboard";
+    else if (user?.role === "influencer") redirectPath = "/influencer-dashboard";
+    else if (user?.role === "admin") redirectPath = "/admin/dashboard";
+
+    return <Navigate to={redirectPath} replace />;
   }
 
   return <>{children}</>;

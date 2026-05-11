@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { InfluencerCard } from "../../components";
 import { useInfluencers } from "../../hooks/useInfluencers";
+import { campaignApi, outreachApi, type Campaign } from "../../api";
 
 const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Tech"];
 
@@ -11,6 +12,52 @@ function FindInfluencers() {
   const [minTrustScore, setMinTrustScore] = useState("");
   const [minFollowers, setMinFollowers] = useState(0);
   const [sort, setSort] = useState<"trustScore" | "followers" | "engagement" | "newest">("newest");
+
+  // Contact Modal State
+  const [contactModal, setContactModal] = useState<{
+    isOpen: boolean;
+    influencerId: string;
+    influencerName: string;
+  }>({ isOpen: false, influencerId: "", influencerName: "" });
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [outreachMessage, setOutreachMessage] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (text: string, type: "success" | "error") => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  useEffect(() => {
+    if (contactModal.isOpen) {
+      campaignApi.getMyCampaigns()
+        .then((res) => {
+          setCampaigns(res.data);
+          if (res.data.length > 0) setSelectedCampaignId(res.data[0]._id);
+        })
+        .catch(console.error);
+    }
+  }, [contactModal.isOpen]);
+
+  const handleSendOutreach = async () => {
+    if (!selectedCampaignId || !outreachMessage) return;
+    setIsSending(true);
+    try {
+      await outreachApi.send(selectedCampaignId, contactModal.influencerId, outreachMessage);
+      await campaignApi.addInfluencer(selectedCampaignId, contactModal.influencerId);
+      setContactModal({ isOpen: false, influencerId: "", influencerName: "" });
+      setOutreachMessage("");
+      setSelectedCampaignId("");
+      showToast("Outreach sent successfully! Influencer added to campaign.", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.response?.data?.message || "Failed to send outreach. They might already be contacted.", "error");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const { influencers, loading, error, pagination, setFilters, setPage } = useInfluencers({ sort: "newest", country: "Pakistan" });
 
@@ -77,10 +124,6 @@ function FindInfluencers() {
               >
                 <option value="">All countries</option>
                 <option value="Pakistan">Pakistan</option>
-                <option value="United States">United States</option>
-                <option value="India">India</option>
-                <option value="United Kingdom">United Kingdom</option>
-                <option value="UAE">UAE</option>
               </select>
             </div>
 
@@ -198,6 +241,11 @@ function FindInfluencers() {
                   followers={inf.totalFollowers >= 1000 ? `${(inf.totalFollowers / 1000).toFixed(0)}K` : String(inf.totalFollowers)}
                   engagement={`${inf.avgEngagementRate.toFixed(1)}%`}
                   trustScore={inf.trustScore}
+                  onContact={() => setContactModal({
+                    isOpen: true,
+                    influencerId: inf.user?._id ?? "",
+                    influencerName: inf.user?.name ?? "Unknown"
+                  })}
                 />
               ))}
             </div>
@@ -248,6 +296,77 @@ function FindInfluencers() {
           )}
         </div>
       </div>
+
+      {/* Contact Modal */}
+      {contactModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6">
+            <h3 className="text-xl font-bold mb-4">Contact {contactModal.influencerName}</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Select Campaign</label>
+                <select
+                  value={selectedCampaignId}
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 outline-none focus:border-purple-500"
+                >
+                  <option value="" disabled>Select a campaign...</option>
+                  {campaigns.map(c => (
+                    <option key={c._id} value={c._id}>{c.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Outreach Message</label>
+                <textarea
+                  value={outreachMessage}
+                  onChange={(e) => setOutreachMessage(e.target.value)}
+                  rows={4}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 outline-none focus:border-purple-500"
+                  placeholder="Hi there, we'd love to collaborate with you on our new campaign..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setContactModal({ isOpen: false, influencerId: "", influencerName: "" })}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-gray-600 font-medium hover:bg-gray-50"
+                  disabled={isSending}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendOutreach}
+                  disabled={isSending || !selectedCampaignId || !outreachMessage.trim()}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {isSending ? "Sending..." : "Send Request"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 transform transition-all duration-300 ${
+          toast.type === "success" ? "bg-gray-900 text-green-400" : "bg-red-600 text-white"
+        }`}>
+          {toast.type === "success" ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          <span className="font-medium text-sm text-white">{toast.text}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,12 +22,15 @@ function BusinessDashboard() {
     fetchStats();
   }, []);
 
+  const maxCampaigns = Math.max(...(stats?.campaignActivity?.map((a: any) => a.count) || [0]), 1);
+  const maxEngagement = Math.max(...(stats?.engagementTrend?.map((a: any) => a.rate) || [0]), 5);
+
   return (
     <div className="business-bg">
       <div className="p-8 max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {user?.name || "Business User"}
+            Welcome back, {user?.name.split(" ")[0] || "Business User"}
           </h1>
           <p className="text-gray-500 mt-1">
             Here's what's happening with your campaigns today.
@@ -137,22 +140,24 @@ function BusinessDashboard() {
 
             <div className="flex items-end justify-between h-48 pt-4 pb-2 border-b border-gray-100">
               <div className="w-full flex justify-around items-end h-full">
-                {/* Empty states for new users */}
-                <div className="w-12 bg-[#8b5cf6] rounded-t-md" style={{ height: stats?.totalCampaigns ? "30%" : "0%" }}></div>
-                <div className="w-12 bg-[#8b5cf6] rounded-t-md" style={{ height: stats?.totalCampaigns ? "45%" : "0%" }}></div>
-                <div className="w-12 bg-[#8b5cf6] rounded-t-md" style={{ height: stats?.totalCampaigns ? "35%" : "0%" }}></div>
-                <div className="w-12 bg-[#8b5cf6] rounded-t-md" style={{ height: stats?.totalCampaigns ? "60%" : "0%" }}></div>
-                <div className="w-12 bg-[#8b5cf6] rounded-t-md" style={{ height: stats?.totalCampaigns ? "75%" : "0%" }}></div>
-                <div className="w-12 bg-[#8b5cf6] rounded-t-md" style={{ height: stats?.totalCampaigns ? "95%" : "0%" }}></div>
+                {stats?.campaignActivity ? stats.campaignActivity.map((item: any, i: number) => (
+                  <div key={i} className="w-12 bg-[#8b5cf6] rounded-t-md transition-all duration-500 hover:bg-purple-700 relative group" 
+                       style={{ height: item.count > 0 ? `${Math.max((item.count / maxCampaigns) * 100, 5)}%` : "0%" }}>
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                      {item.count}
+                    </div>
+                  </div>
+                )) : (
+                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">Loading...</div>
+                )}
               </div>
             </div>
             <div className="flex justify-around mt-2 text-xs text-gray-400">
-              <span>Jan</span>
-              <span>Feb</span>
-              <span>Mar</span>
-              <span>Apr</span>
-              <span>May</span>
-              <span>Jun</span>
+              {stats?.campaignActivity ? stats.campaignActivity.map((item: any, i: number) => (
+                <span key={i}>{item.month}</span>
+              )) : (
+                <><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span></>
+              )}
             </div>
           </div>
 
@@ -162,33 +167,40 @@ function BusinessDashboard() {
 
             <div className="relative h-48 pt-4 pb-2 border-b border-gray-100">
               <div className="w-full h-full relative">
-                {stats?.totalCampaigns ? (
+                {stats?.engagementTrend ? (
                   <svg className="w-full h-full" viewBox="0 0 300 150" preserveAspectRatio="none">
                     <line x1="0" y1="37" x2="300" y2="37" stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4" />
                     <line x1="0" y1="75" x2="300" y2="75" stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4" />
                     <line x1="0" y1="112" x2="300" y2="112" stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4" />
-                    <polyline points="10,120 60,90 120,95 180,60 240,40 290,20" fill="none" stroke="#8b5cf6" strokeWidth="2" />
-                    <circle cx="10" cy="120" r="3" fill="white" stroke="#8b5cf6" strokeWidth="2" />
-                    <circle cx="60" cy="90" r="3" fill="white" stroke="#8b5cf6" strokeWidth="2" />
-                    <circle cx="120" cy="95" r="3" fill="white" stroke="#8b5cf6" strokeWidth="2" />
-                    <circle cx="180" cy="60" r="3" fill="white" stroke="#8b5cf6" strokeWidth="2" />
-                    <circle cx="240" cy="40" r="3" fill="white" stroke="#8b5cf6" strokeWidth="2" />
-                    <circle cx="290" cy="20" r="3" fill="white" stroke="#8b5cf6" strokeWidth="2" />
+                    <polyline 
+                      points={stats.engagementTrend.map((item: any, i: number) => `${25 + (i * 50)},${140 - ((item.rate / maxEngagement) * 120)}`).join(" ")} 
+                      fill="none" stroke="#8b5cf6" strokeWidth="2" 
+                    />
+                    {stats.engagementTrend.map((item: any, i: number) => (
+                      <circle 
+                        key={i} 
+                        cx={25 + (i * 50)} 
+                        cy={140 - ((item.rate / maxEngagement) * 120)} 
+                        r="4" fill="white" stroke="#8b5cf6" strokeWidth="2" 
+                        className="cursor-pointer hover:r-6 transition-all"
+                      >
+                        <title>{item.rate}%</title>
+                      </circle>
+                    ))}
                   </svg>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-                    No engagement data yet
+                    Loading...
                   </div>
                 )}
               </div>
             </div>
             <div className="flex justify-around mt-2 text-xs text-gray-400">
-              <span>Jan</span>
-              <span>Feb</span>
-              <span>Mar</span>
-              <span>Apr</span>
-              <span>May</span>
-              <span>Jun</span>
+              {stats?.engagementTrend ? stats.engagementTrend.map((item: any, i: number) => (
+                <span key={i}>{item.month}</span>
+              )) : (
+                <><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span></>
+              )}
             </div>
           </div>
         </div>

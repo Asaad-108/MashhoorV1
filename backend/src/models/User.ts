@@ -8,6 +8,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  phone?: string;
   avatar?: string;
   isVerified: boolean;
   isActive: boolean;
@@ -44,6 +45,10 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: ["business", "influencer"],
       required: true,
+    },
+    phone: {
+      type: String,
+      default: "",
     },
     avatar: {
       type: String,

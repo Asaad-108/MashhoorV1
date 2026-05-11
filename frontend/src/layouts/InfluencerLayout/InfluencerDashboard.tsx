@@ -41,12 +41,10 @@ function InfluencerDashboard() {
             <div className="card-white flex-1">
               <div className="flex justify-between text-gray-500">
                 <span>Total Earnings</span>
-                <span>
-                  <img src="/src/assets/dollar-sign.svg" alt="" />
-                </span>
+                <span className="font-bold text-gray-400">Rs</span>
               </div>
               <div className="stat-value">
-                {loading ? "-" : `$${(stats?.totalEarnings || 0).toLocaleString()}`}
+                {loading ? "-" : `Rs ${(stats?.totalEarnings || 0).toLocaleString()}`}
               </div>
               <div className="stat-sub text-gray-400">Lifetime earnings</div>
             </div>
@@ -180,7 +178,7 @@ function InfluencerDashboard() {
                   <div className="flex items-center gap-6">
                     <span className="badge badge-blue capitalize">{camp.status}</span>
                     <span className="font-semibold text-lg">
-                      {camp.budget?.currency} {camp.budget?.total?.toLocaleString()}
+                      Rs {camp.budget?.total?.toLocaleString()}
                     </span>
                   </div>
                 </div>

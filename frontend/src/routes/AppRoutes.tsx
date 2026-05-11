@@ -24,6 +24,11 @@ import {
   SignUp,
   Working,
   InfluencerDetails,
+  BusinessCampaignDetail,
+  EditCampaign,
+  AdminLayout,
+  AdminDashboard,
+  ReportedUsers,
 } from "../layouts/index";
 import ScrollToTop from "./ScrollToTop";
 import ProtectedRoute from "./ProtectedRoute";
@@ -65,6 +70,8 @@ export function AppRoutes() {
           <Route path="/business-notifications" element={<ProtectedRoute allowedRole="business"><Notification /></ProtectedRoute>} />
           <Route path="/business-messages" element={<ProtectedRoute allowedRole="business"><Messages /></ProtectedRoute>} />
           <Route path="/influencer/:id" element={<ProtectedRoute allowedRole="business"><InfluencerDetails /></ProtectedRoute>} />
+          <Route path="/business-campaign/:id" element={<ProtectedRoute allowedRole="business"><BusinessCampaignDetail /></ProtectedRoute>} />
+          <Route path="/business-campaign/edit/:id" element={<ProtectedRoute allowedRole="business"><EditCampaign /></ProtectedRoute>} />
         </Route>
 
         {/* Influencer Routes — protected */}
@@ -73,6 +80,12 @@ export function AppRoutes() {
           <Route path="/campaign-details/:id" element={<ProtectedRoute allowedRole="influencer"><CampaignDetails /></ProtectedRoute>} />
           <Route path="/influencer-requests" element={<ProtectedRoute allowedRole="influencer"><Requests /></ProtectedRoute>} />
           <Route path="/influencer-settings" element={<ProtectedRoute allowedRole="influencer"><Settings /></ProtectedRoute>} />
+        </Route>
+
+        {/* Admin Routes — protected */}
+        <Route element={<AdminLayout />}>
+          <Route path="/admin/dashboard" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute allowedRole="admin"><ReportedUsers /></ProtectedRoute>} />
         </Route>
 
         {/* Fallback */}

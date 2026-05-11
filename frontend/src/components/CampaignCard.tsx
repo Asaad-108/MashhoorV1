@@ -5,6 +5,9 @@ type CampaignCardProps = {
   influencers: number;
   budget: string;
   progress: number;
+  onViewDetails?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 };
 function CampaignCard({
   title,
@@ -12,16 +15,23 @@ function CampaignCard({
   influencers,
   budget,
   progress,
+  onViewDetails,
+  onEdit,
+  onDelete,
 }: CampaignCardProps) {
   return (
     <>
-      <div className="campaign-card w-4xl">
+      <div className="campaign-card">
         <div className="flex justify-between items-start mb-2">
           <div className="flex items-center">
             <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
             <span className="status-badge">{status}</span>
           </div>
-          <button className="text-gray-400 hover:text-gray-600">
+          <button 
+            onClick={onDelete}
+            className="text-gray-400 hover:text-red-500 transition-colors"
+            title="Delete Campaign"
+          >
             <svg
               width="20"
               height="20"
@@ -32,9 +42,9 @@ function CampaignCard({
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="1"></circle>
-              <circle cx="12" cy="5" r="1"></circle>
-              <circle cx="12" cy="19" r="1"></circle>
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
             </svg>
           </button>
         </div>
@@ -58,12 +68,12 @@ function CampaignCard({
         </div>
 
         <div className="flex gap-3">
-          <button className="btn-action-outline">
+          <button onClick={onViewDetails} className="btn-action-outline">
             <img src="/src/assets/eye.svg" alt="View" width={16} height={16} />
             View Details
           </button>
 
-          <button className="btn-action-outline">
+          <button onClick={onEdit} className="btn-action-outline">
             <img
               src="/src/assets/square-pen.svg"
               alt="Edit"
@@ -72,8 +82,6 @@ function CampaignCard({
             />
             Edit
           </button>
-
-          <button className="btn-action-outline">Analytics</button>
         </div>
       </div>
     </>

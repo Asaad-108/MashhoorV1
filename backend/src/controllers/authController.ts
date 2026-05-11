@@ -173,3 +173,31 @@ export const getMe = async (
     next(err);
   }
 };
+
+// PUT /api/auth/profile
+export const updateProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { name, email, phone } = req.body;
+    const user = await User.findById(req.user?.userId);
+
+    if (!user) return next(new AppError("User not found", 404));
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+    if (phone !== undefined) user.phone = phone;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: { user },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
