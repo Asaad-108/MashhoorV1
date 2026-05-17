@@ -19,6 +19,8 @@ export interface IInfluencerProfile extends Document {
       subscribers: number;
       avgViews: number;
       engagementRate: number;
+      daysSinceLastUpload?: number;
+      videoCount?: number;
     };
     tiktok?: {
       handle: string;
@@ -38,6 +40,7 @@ export interface IInfluencerProfile extends Document {
   tags: string[];
   totalFollowers: number;           // computed sum across platforms
   avgEngagementRate: number;        // computed average
+  systemCategory?: string;          // AI-clustered category
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,6 +77,8 @@ const InfluencerProfileSchema = new Schema<IInfluencerProfile>(
         subscribers: { type: Number, default: 0 },
         avgViews: { type: Number, default: 0 },
         engagementRate: { type: Number, default: 0 },
+        daysSinceLastUpload: { type: Number, default: 0 },
+        videoCount: { type: Number, default: 0 },
       },
       tiktok: {
         handle: String,
@@ -92,6 +97,7 @@ const InfluencerProfileSchema = new Schema<IInfluencerProfile>(
     tags: [String],
     totalFollowers: { type: Number, default: 0 },
     avgEngagementRate: { type: Number, default: 0 },
+    systemCategory: { type: String, trim: true },
   },
   { timestamps: true }
 );

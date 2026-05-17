@@ -21,6 +21,7 @@ router.get("/my-campaigns", protect, authorize("influencer"), getInfluencerCampa
 // Business routes
 router.get("/", protect, authorize("business"), getMyCampaigns);
 router.post("/", protect, authorize("business"), createCampaign);
+
 router.put("/:id", protect, authorize("business"), updateCampaign);
 router.delete("/:id", protect, authorize("business"), deleteCampaign);
 router.post("/:id/influencers", protect, authorize("business"), addInfluencerToCampaign);

@@ -4,6 +4,8 @@ import api from "../../api/client";
 import { campaignApi } from "../../api/campaignApi";
 import type { Campaign } from "../../api/campaignApi";
 import { outreachApi } from "../../api/outreachApi";
+import { influencerApi } from "../../api/influencerApi";
+import type { ROIPredictionResult } from "../../api/influencerApi";
 
 interface InfluencerProfile {
   _id: string;
@@ -35,6 +37,12 @@ interface InfluencerProfile {
     };
   };
   trustScore: number;
+  trustScoreBreakdown?: {
+    engagementAuthenticity: number;
+    followerQuality: number;
+    contentConsistency: number;
+    collaborationHistory: number;
+  };
   totalFollowers: number;
   avgEngagementRate: number;
   tags: string[];
@@ -61,6 +69,9 @@ export default function InfluencerDetails() {
         setLoading(true);
         const res = await api.get(`/influencers/${id}`);
         setProfile(res.data.data);
+        if (res.data.data.aiModelMetrics) {
+          setTrustAiMetrics(res.data.data.aiModelMetrics);
+        }
       } catch (err: any) {
         setError(err.response?.data?.message || "Failed to load profile.");
       } finally {
@@ -74,7 +85,7 @@ export default function InfluencerDetails() {
     if (showModal) {
       campaignApi.getMyCampaigns()
         .then(res => setCampaigns(res.data))
-        .catch(err => setModalError("Failed to load campaigns"));
+        .catch(() => setModalError("Failed to load campaigns"));
     }
   }, [showModal]);
 
@@ -99,6 +110,49 @@ export default function InfluencerDetails() {
     }
   };
 
+  const [calculatingTrust, setCalculatingTrust] = useState(false);
+  const [trustAiMetrics, setTrustAiMetrics] = useState<any>(null);
+
+  const handleCalculateTrustScore = async () => {
+    if (!profile) return;
+    try {
+      setCalculatingTrust(true);
+      const res = await influencerApi.calculateTrustScore(profile.user._id);
+      setProfile({ ...profile, trustScore: res.trustScore, trustScoreBreakdown: res.breakdown });
+      if (res.aiModelMetrics) {
+        setTrustAiMetrics(res.aiModelMetrics);
+      }
+    } catch (err) {
+      console.error("Failed to calculate trust score", err);
+      alert("Failed to calculate trust score.");
+    } finally {
+      setCalculatingTrust(false);
+    }
+  };
+
+  // ROI Predictor State
+  const [investment, setInvestment] = useState("10000");
+  const [productValue, setProductValue] = useState("2000");
+  const [predictingROI, setPredictingROI] = useState(false);
+  const [roiResult, setRoiResult] = useState<ROIPredictionResult | null>(null);
+
+  const handlePredictROI = async () => {
+    if (!profile) return;
+    try {
+      setPredictingROI(true);
+      const res = await influencerApi.predictROI(profile.user._id, {
+        investment: Number(investment),
+        productValue: Number(productValue)
+      });
+      setRoiResult(res);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to predict ROI");
+    } finally {
+      setPredictingROI(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#f9fafb] p-8 flex justify-center items-center">
@@ -120,7 +174,7 @@ export default function InfluencerDetails() {
     );
   }
 
-  const { user, location, bio, tags, totalFollowers, avgEngagementRate, trustScore, niche, platforms } = profile;
+  const { user, location, bio, tags, totalFollowers, avgEngagementRate, trustScore, trustScoreBreakdown, niche, platforms } = profile;
   
   const followersStr = totalFollowers >= 1000 ? `${(totalFollowers / 1000).toFixed(0)}K` : String(totalFollowers);
   
@@ -233,6 +287,136 @@ export default function InfluencerDetails() {
         </div>
       </div>
 
+      {/* Trust Score Breakdown */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm mb-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Mashhoor Trust Score Details</h2>
+          <button
+            onClick={handleCalculateTrustScore}
+            disabled={calculatingTrust}
+            className="px-4 py-2 bg-purple-50 text-purple-700 font-medium rounded-lg text-sm hover:bg-purple-100 transition-colors"
+          >
+            {calculatingTrust ? "Analyzing..." : "Run AI Fraud Analysis"}
+          </button>
+        </div>
+
+        {trustAiMetrics && (
+          <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-4 rounded-xl mb-6 shadow-md flex flex-col md:flex-row justify-between items-center gap-4 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              </div>
+              <div>
+                <div className="text-xs text-purple-200 font-semibold uppercase tracking-wider">{trustAiMetrics.modelType}</div>
+                <div className="text-sm font-bold">AI Fraud & Trust Engine Active</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full text-xs font-semibold text-green-300 border border-white/10 backdrop-blur-sm">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+              Real-time AI Prediction
+            </div>
+          </div>
+        )}
+
+        {trustScoreBreakdown ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="text-sm text-gray-500 mb-1">Engagement Authenticity</div>
+              <div className="text-xl font-bold text-gray-900">{trustScoreBreakdown.engagementAuthenticity}%</div>
+              <div className="text-xs text-gray-400 mt-1">Bot/Spike Detection</div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="text-sm text-gray-500 mb-1">Follower Quality</div>
+              <div className="text-xl font-bold text-gray-900">{trustScoreBreakdown.followerQuality}%</div>
+              <div className="text-xs text-gray-400 mt-1">Real vs Fake Accounts</div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="text-sm text-gray-500 mb-1">Content Consistency</div>
+              <div className="text-xl font-bold text-gray-900">{trustScoreBreakdown.contentConsistency}%</div>
+              <div className="text-xs text-gray-400 mt-1">Posting Frequency</div>
+            </div>
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="text-sm text-gray-500 mb-1">Commercial Track Record</div>
+              <div className="text-xl font-bold text-gray-900">{trustScoreBreakdown.collaborationHistory}%</div>
+              <div className="text-xs text-gray-400 mt-1">Est. Sponsorship Experience</div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            Click "Run AI Fraud Analysis" to calculate real-time bot detection and engagement authenticity metrics.
+          </div>
+        )}
+      </div>
+
+      {/* Influencer-Specific ROI Predictor */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm mb-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-gray-900">✨ Predict Campaign ROI</h2>
+        </div>
+        <p className="text-sm text-gray-500 mb-6">
+          See exactly how much revenue you can generate by collaborating with {user.name}. We use their real-time reach, engagement rate, and Mashhoor Trust Score to calculate your expected return on investment.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Your Budget / Offer (PKR)</label>
+            <input type="number" value={investment} onChange={(e) => setInvestment(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-900 focus:outline-none focus:border-purple-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Avg Product Price (PKR)</label>
+            <input type="number" value={productValue} onChange={(e) => setProductValue(e.target.value)} className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-900 focus:outline-none focus:border-purple-500" />
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={handlePredictROI}
+              disabled={predictingROI}
+              className="w-full py-2.5 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+            >
+              {predictingROI ? "Calculating..." : "Predict ROI"}
+            </button>
+          </div>
+        </div>
+
+        {roiResult && (
+          <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 mt-4 animate-fadeIn">
+            <div className="grid grid-cols-3 gap-4 mb-3">
+              <div className="bg-white p-3 rounded-lg text-center shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Est. Revenue</div>
+                <div className="font-bold text-gray-900">PKR {roiResult.estimatedRevenue.toLocaleString()}</div>
+              </div>
+              <div className="bg-white p-3 rounded-lg text-center shadow-sm">
+                <div className="text-xs text-gray-500 mb-1">Net ROI</div>
+                <div className="font-bold text-gray-900">PKR {roiResult.predictedROI.toLocaleString()}</div>
+              </div>
+              <div className="bg-white p-3 rounded-lg text-center shadow-sm border-b-2 border-green-400">
+                <div className="text-xs text-gray-500 mb-1">ROI %</div>
+                <div className="font-bold text-green-600">+{roiResult.roiPercentage.toFixed(1)}%</div>
+              </div>
+            </div>
+            {roiResult.aiModelMetrics && (
+              <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-4 rounded-xl mb-3 shadow-md flex flex-col md:flex-row justify-between items-center gap-4 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                  </div>
+                  <div>
+                    <div className="text-xs text-purple-200 font-semibold uppercase tracking-wider">{roiResult.aiModelMetrics.modelType}</div>
+                    <div className="text-sm font-bold">AI Regression Engine Active</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full text-xs font-semibold text-green-300 border border-white/10 backdrop-blur-sm">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                  Real-time AI Prediction
+                </div>
+              </div>
+            )}
+            <p className="text-sm text-purple-800 bg-white p-3 rounded-lg border border-purple-100 leading-relaxed">
+              {roiResult.summary}
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">
         <button className="px-4 py-3 text-sm font-bold text-gray-900 border-b-2 border-gray-900 bg-white rounded-t-lg shadow-[0_-2px_0_0_rgba(0,0,0,0.05)]">
@@ -241,11 +425,29 @@ export default function InfluencerDetails() {
       </div>
 
       {/* Past Collaborations Content */}
-      <div className="space-y-4">
-        <div className="text-center py-10 text-gray-500 bg-white rounded-2xl border border-gray-200 shadow-sm">
-          <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-          This influencer has no past campaigns yet.
-        </div>
+      <div className="space-y-4 mb-12">
+        {(profile as any).pastCampaigns && (profile as any).pastCampaigns.length > 0 ? (
+          (profile as any).pastCampaigns.map((c: any) => (
+            <div key={c._id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fadeIn">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-lg font-bold text-gray-900">{c.title}</h3>
+                  <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-bold uppercase tracking-wider">{c.status}</span>
+                </div>
+                <p className="text-sm text-gray-600 line-clamp-2 mb-2">{c.description}</p>
+                <div className="text-xs text-gray-400 font-medium">Campaign Budget: {c.budget?.currency || "PKR"} {c.budget?.total?.toLocaleString()}</div>
+              </div>
+              <div className="bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700 whitespace-nowrap">
+                Verified Mashhoor Collab
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-10 text-gray-500 bg-white rounded-2xl border border-gray-200 shadow-sm">
+            <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+            This influencer has no past campaigns on Mashhoor yet.
+          </div>
+        )}
       </div>
 
       {/* Modal Overlay */}

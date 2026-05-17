@@ -25,6 +25,7 @@ export type InfluencerProfile = {
   tags: string[];
   totalFollowers: number;
   avgEngagementRate: number;
+  systemCategory?: string;
 };
 
 export type InfluencerFilters = {
@@ -45,6 +46,18 @@ export type PaginatedInfluencers = {
   pagination: { total: number; page: number; limit: number; pages: number };
 };
 
+export type ROIPredictionResult = {
+  estimatedRevenue: number;
+  predictedROI: number;
+  roiPercentage: number;
+  summary: string;
+  aiModelMetrics?: {
+    r2Score: number;
+    meanAbsoluteError: number;
+    modelType: string;
+  };
+};
+
 export const influencerApi = {
   getAll: async (filters: InfluencerFilters = {}): Promise<PaginatedInfluencers> => {
     const { data } = await api.get("/influencers", { params: filters });
@@ -57,9 +70,29 @@ export const influencerApi = {
   },
 
   updateMyProfile: async (
-    updates: Partial<Omit<InfluencerProfile, "_id" | "user" | "trustScore" | "totalFollowers" | "avgEngagementRate">>
+    updates: Partial<Omit<InfluencerProfile, "_id" | "user" | "trustScore" | "totalFollowers" | "avgEngagementRate" | "systemCategory">>
   ): Promise<InfluencerProfile> => {
     const { data } = await api.put("/influencers/profile", updates);
+    return data.data;
+  },
+
+  getRecommendations: async (filters: InfluencerFilters = {}): Promise<InfluencerProfile[]> => {
+    const { data } = await api.get("/influencers/recommendations", { params: filters });
+    return data.data;
+  },
+
+  categorizeInfluencers: async (): Promise<{ success: boolean; message: string; data: any }> => {
+    const { data } = await api.post("/influencers/categorize");
+    return data;
+  },
+
+  calculateTrustScore: async (userId: string): Promise<{ trustScore: number, breakdown: any, aiModelMetrics?: any }> => {
+    const { data } = await api.post(`/influencers/${userId}/calculate-trust-score`);
+    return data.data;
+  },
+
+  predictROI: async (userId: string, payload: { investment: number; productValue: number }): Promise<ROIPredictionResult> => {
+    const { data } = await api.post(`/influencers/${userId}/predict-roi`, payload);
     return data.data;
   },
 };

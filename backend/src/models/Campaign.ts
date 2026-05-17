@@ -26,14 +26,13 @@ export interface ICampaign extends Document {
   status: CampaignStatus;
   selectedInfluencers: mongoose.Types.ObjectId[];   // ref: User
   goals: string;
-  roiPrediction?: {
-    estimatedReach: number;
-    estimatedEngagement: number;
-    estimatedROI: number;                       // percentage
-    confidence: number;                         // 0-1 model confidence
-    computedAt: Date;
-  };
   progress: number;                             // 0-100
+  reviews?: {
+    influencer: mongoose.Types.ObjectId;
+    rating: number;                             // 1 to 5
+    comment: string;
+    createdAt: Date;
+  }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -80,14 +79,15 @@ const CampaignSchema = new Schema<ICampaign>(
     },
     selectedInfluencers: [{ type: Schema.Types.ObjectId, ref: "User" }],
     goals: { type: String, maxlength: 500 },
-    roiPrediction: {
-      estimatedReach: Number,
-      estimatedEngagement: Number,
-      estimatedROI: Number,
-      confidence: Number,
-      computedAt: Date,
-    },
     progress: { type: Number, default: 0, min: 0, max: 100 },
+    reviews: [
+      {
+        influencer: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        rating: { type: Number, required: true, min: 1, max: 5 },
+        comment: { type: String, maxlength: 1000 },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { InfluencerCard } from "../../components";
 import { useInfluencers } from "../../hooks/useInfluencers";
-import { campaignApi, outreachApi, type Campaign } from "../../api";
+import { campaignApi, outreachApi, influencerApi, type Campaign } from "../../api";
+import type { InfluencerProfile } from "../../api/influencerApi";
 
 const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Tech"];
 
@@ -62,6 +63,41 @@ function FindInfluencers() {
   const { influencers, loading, error, pagination, setFilters, setPage } = useInfluencers({ sort: "newest", country: "Pakistan" });
 
   const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [isRecommendedMode, setIsRecommendedMode] = useState(false);
+  const [recommendedInfluencers, setRecommendedInfluencers] = useState<InfluencerProfile[]>([]);
+  const [isCategorizing, setIsCategorizing] = useState(false);
+
+  const fetchRecommendations = async () => {
+    try {
+      setIsRecommendedMode(true);
+      const filters = {
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(niche && { targetNiche: niche }), // Use targetNiche for scoring
+        ...(country && { country }),
+        ...(minTrustScore && { minTrustScore: Number(minTrustScore) }),
+        ...(minFollowers > 0 && { minFollowers }),
+      };
+      const data = await influencerApi.getRecommendations(filters);
+      setRecommendedInfluencers(data);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to fetch recommendations", "error");
+    }
+  };
+
+  const runCategorization = async () => {
+    try {
+      setIsCategorizing(true);
+      await influencerApi.categorizeInfluencers();
+      showToast("AI Categorization complete! Refreshing list...", "success");
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to run categorization", "error");
+    } finally {
+      setIsCategorizing(false);
+    }
+  };
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -80,6 +116,11 @@ function FindInfluencers() {
       sort,
     });
     setPage(1); // Reset page on filter change
+    
+    // If in recommended mode, refetch recommendations when niche changes
+    if (isRecommendedMode) {
+      fetchRecommendations();
+    }
   }, [debouncedSearch, niche, country, minTrustScore, minFollowers, sort, setFilters, setPage]);
 
   const resetFilters = () => {
@@ -89,8 +130,11 @@ function FindInfluencers() {
     setMinTrustScore("");
     setMinFollowers(0);
     setSort("newest");
+    setIsRecommendedMode(false);
     setFilters({ sort: "newest", country: "Pakistan" });
   };
+
+  const displayedInfluencers = isRecommendedMode ? recommendedInfluencers : influencers;
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -177,15 +221,30 @@ function FindInfluencers() {
                 // Auto-debounced
                 placeholder="Search by name, niche, or location..."
                 className="w-full outline-none text-gray-700 placeholder-gray-400"
+                disabled={isRecommendedMode}
               />
             </div>
+            <button
+              onClick={() => isRecommendedMode ? setIsRecommendedMode(false) : fetchRecommendations()}
+              className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${isRecommendedMode ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'}`}
+            >
+              <span>✨</span> {isRecommendedMode ? "Show All" : "AI Recommend"}
+            </button>
+            <button
+              onClick={runCategorization}
+              disabled={isCategorizing}
+              className="px-4 py-2 rounded-lg font-medium whitespace-nowrap bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              {isCategorizing ? "Running..." : "Run ML Clustering"}
+            </button>
           </div>
 
           {/* Sort + count */}
           <div className="flex justify-between items-center mb-6">
             <span className="text-gray-500">
-              {loading ? "Loading..." : `${pagination?.total ?? influencers.length} influencers found`}
+              {loading ? "Loading..." : `${isRecommendedMode ? displayedInfluencers.length : (pagination?.total ?? displayedInfluencers.length)} influencers found`}
             </span>
+            {!isRecommendedMode && (
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as typeof sort)}
@@ -196,6 +255,10 @@ function FindInfluencers() {
               <option value="engagement">Best Engagement</option>
               <option value="newest">Newest Members</option>
             </select>
+            )}
+            {isRecommendedMode && (
+              <span className="text-sm font-medium text-purple-600 bg-purple-50 px-3 py-1 rounded-full">Sorted by AI Match Score</span>
+            )}
           </div>
 
           {/* Error state */}
@@ -228,9 +291,9 @@ function FindInfluencers() {
           )}
 
           {/* Results grid */}
-          {!loading && influencers.length > 0 && (
+          {!loading && displayedInfluencers.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {influencers.map((inf) => (
+              {displayedInfluencers.map((inf) => (
                 <InfluencerCard
                   key={inf._id}
                   id={inf.user?._id ?? ""}
@@ -241,6 +304,7 @@ function FindInfluencers() {
                   followers={inf.totalFollowers >= 1000 ? `${(inf.totalFollowers / 1000).toFixed(0)}K` : String(inf.totalFollowers)}
                   engagement={`${inf.avgEngagementRate.toFixed(1)}%`}
                   trustScore={inf.trustScore}
+                  systemCategory={inf.systemCategory}
                   onContact={() => setContactModal({
                     isOpen: true,
                     influencerId: inf.user?._id ?? "",
@@ -252,7 +316,7 @@ function FindInfluencers() {
           )}
 
           {/* Empty state */}
-          {!loading && influencers.length === 0 && !error && (
+          {!loading && displayedInfluencers.length === 0 && !error && (
             <div className="text-center py-16 text-gray-400">
               <img src="/src/assets/search.svg" alt="" className="mx-auto mb-4 opacity-30" width={48} height={48} />
               <p className="text-lg">No influencers found matching your filters.</p>
@@ -263,7 +327,7 @@ function FindInfluencers() {
           )}
 
           {/* Pagination */}
-          {pagination && pagination.pages > 1 && (
+          {!isRecommendedMode && pagination && pagination.pages > 1 && (
             <div className="flex justify-center gap-2 flex-wrap">
               <button
                 onClick={() => setPage(Math.max(1, pagination.page - 1))}

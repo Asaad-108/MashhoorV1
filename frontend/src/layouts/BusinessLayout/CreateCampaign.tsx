@@ -285,7 +285,6 @@ function CreateCampaign() {
                   className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-purple-500"
                 />
               </div>
-
             </div>
           )}
 

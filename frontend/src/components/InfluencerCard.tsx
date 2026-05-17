@@ -9,6 +9,7 @@ type InfluencerCardProps = {
   followers: string;
   engagement: string;
   trustScore: number;
+  systemCategory?: string;
   onContact?: () => void;
 };
 
@@ -21,6 +22,7 @@ function InfluencerCard({
   followers,
   engagement,
   trustScore,
+  systemCategory,
   onContact,
 }: InfluencerCardProps) {
   const navigate = useNavigate();
@@ -47,7 +49,14 @@ function InfluencerCard({
               height={17}
             />
           </div>
-          <div className="text-sm text-gray-500">{niche}</div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-sm text-gray-500">{niche}</span>
+            {systemCategory && (
+              <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                {systemCategory}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

@@ -1,8 +1,11 @@
 import { Response, NextFunction } from "express";
 import { InfluencerProfile } from "../models/InfluencerProfile";
 import { User } from "../models/User";
+import { Campaign } from "../models/Campaign";
 import { AppError } from "../middleware/errorHandler";
 import { AuthRequest } from "../types";
+import { calculateTrustScore } from "../services/trustScoreService";
+import { categorizeInfluencersByNiche, predictCampaignROIWithML } from "../services/mlService";
 
 // GET /api/influencers
 // Query params: niche, country, minFollowers, maxFollowers, minTrustScore, minEngagement, page, limit, sort
@@ -99,9 +102,106 @@ export const getInfluencers = async (
       ? profiles.filter((p) => p.user !== null)
       : profiles;
 
+    // Automatically update Trust Scores in real-time for all cards
+    const updatedFiltered = await Promise.all(
+      filtered.map(async (profile) => {
+        try {
+          // Fetch real-time data from YouTube Graph API if it's a youtube seeded account
+          const user = profile.user as any;
+          if (user && user.email && user.email.endsWith("@youtube.test")) {
+            const channelId = user.email.split("@")[0];
+            const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
+            
+            try {
+              let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${API_KEY}`;
+              let statsRes = await fetch(statsURL);
+              let statsData = await statsRes.json() as any;
+              let channelData = statsData.items?.[0];
+              
+              if (!channelData && profile.platforms?.youtube?.handle) {
+                 const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(profile.platforms.youtube.handle)}&maxResults=1&key=${API_KEY}`;
+                 const searchRes = await fetch(searchURL);
+                 const searchData = await searchRes.json() as any;
+                 const searchItem = searchData.items?.[0];
+                 if (searchItem) {
+                    const realChannelId = searchItem.snippet.channelId;
+                    const realStatsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${realChannelId}&key=${API_KEY}`;
+                    const realStatsRes = await fetch(realStatsURL);
+                    const realStatsData = await realStatsRes.json() as any;
+                    channelData = realStatsData.items?.[0];
+                 }
+              }
+
+              if (channelData) {
+                const subs = parseInt(channelData.statistics.subscriberCount || "0", 10);
+                const views = parseInt(channelData.statistics.viewCount || "0", 10);
+                const videoCount = parseInt(channelData.statistics.videoCount || "0", 10);
+                const description = (channelData.snippet.description || "").substring(0, 490);
+                
+                const avgViews = Math.floor(views / (videoCount || 1)) || 0;
+                const engagementRate = Math.min(100, Number(((avgViews / (subs || 1)) * 100).toFixed(2)));
+
+                let daysSinceLastUpload = profile.platforms?.youtube?.daysSinceLastUpload || 0;
+                const uploadsPlaylistId = channelData.contentDetails?.relatedPlaylists?.uploads;
+                if (uploadsPlaylistId) {
+                   try {
+                     const playlistRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${API_KEY}`);
+                     const playlistData = await playlistRes.json() as any;
+                     const publishedAt = playlistData.items?.[0]?.snippet?.publishedAt;
+                     if (publishedAt) {
+                       const diff = Date.now() - new Date(publishedAt).getTime();
+                       daysSinceLastUpload = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+                     }
+                   } catch (playlistErr) {}
+                }
+
+                await InfluencerProfile.updateOne(
+                  { _id: profile._id },
+                  { 
+                     $set: { 
+                       "platforms.youtube.subscribers": subs,
+                       "platforms.youtube.avgViews": avgViews,
+                       "platforms.youtube.engagementRate": engagementRate,
+                       "platforms.youtube.handle": channelData.snippet.title,
+                       "platforms.youtube.daysSinceLastUpload": daysSinceLastUpload,
+                       "platforms.youtube.videoCount": videoCount,
+                       bio: description,
+                       totalFollowers: subs,
+                       avgEngagementRate: engagementRate
+                     } 
+                  }
+                );
+                
+                if (profile.platforms && profile.platforms.youtube) {
+                    profile.platforms.youtube.subscribers = subs;
+                    profile.platforms.youtube.avgViews = avgViews;
+                    profile.platforms.youtube.engagementRate = engagementRate;
+                    profile.platforms.youtube.handle = channelData.snippet.title;
+                    profile.platforms.youtube.daysSinceLastUpload = daysSinceLastUpload;
+                    profile.platforms.youtube.videoCount = videoCount;
+                }
+                profile.bio = description;
+                profile.totalFollowers = subs;
+                profile.avgEngagementRate = engagementRate;
+              }
+            } catch (err) {}
+          }
+
+          const { score, breakdown } = await calculateTrustScore(profile);
+          profile.trustScore = score;
+          profile.trustScoreBreakdown = breakdown;
+          await profile.save();
+          return profile;
+        } catch (calcErr) {
+          console.error("Error auto-updating trust score in list:", calcErr);
+          return profile;
+        }
+      })
+    );
+
     res.status(200).json({
       success: true,
-      data: filtered,
+      data: updatedFiltered,
       pagination: {
         total,
         page: pageNum,
@@ -134,19 +234,50 @@ export const getInfluencerById = async (
       const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
       
       try {
-        const statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${API_KEY}`;
-        const statsRes = await fetch(statsURL);
-        const statsData = await statsRes.json() as any;
-        const channelData = statsData.items?.[0];
+        let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${API_KEY}`;
+        let statsRes = await fetch(statsURL);
+        let statsData = await statsRes.json() as any;
+        let channelData = statsData.items?.[0];
         
+        // If direct lowercase ID fails, fallback to searching by channel handle/name!
+        if (!channelData && profile.platforms?.youtube?.handle) {
+           const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(profile.platforms.youtube.handle)}&maxResults=1&key=${API_KEY}`;
+           const searchRes = await fetch(searchURL);
+           const searchData = await searchRes.json() as any;
+           const searchItem = searchData.items?.[0];
+           if (searchItem) {
+              const realChannelId = searchItem.snippet.channelId;
+              const realStatsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${realChannelId}&key=${API_KEY}`;
+              const realStatsRes = await fetch(realStatsURL);
+              const realStatsData = await realStatsRes.json() as any;
+              channelData = realStatsData.items?.[0];
+           }
+        }
+
         if (channelData) {
           const subs = parseInt(channelData.statistics.subscriberCount || "0", 10);
           const views = parseInt(channelData.statistics.viewCount || "0", 10);
           const videoCount = parseInt(channelData.statistics.videoCount || "0", 10);
-          const description = channelData.snippet.description || "";
+          const description = (channelData.snippet.description || "").substring(0, 490);
           
           const avgViews = Math.floor(views / (videoCount || 1)) || 0;
           const engagementRate = Math.min(100, Number(((avgViews / (subs || 1)) * 100).toFixed(2)));
+
+          let daysSinceLastUpload = profile.platforms?.youtube?.daysSinceLastUpload || 0;
+          const uploadsPlaylistId = channelData.contentDetails?.relatedPlaylists?.uploads;
+          if (uploadsPlaylistId) {
+             try {
+               const playlistRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${API_KEY}`);
+               const playlistData = await playlistRes.json() as any;
+               const publishedAt = playlistData.items?.[0]?.snippet?.publishedAt;
+               if (publishedAt) {
+                 const diff = Date.now() - new Date(publishedAt).getTime();
+                 daysSinceLastUpload = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+               }
+             } catch (playlistErr) {
+               console.error("Error fetching playlist items:", playlistErr);
+             }
+          }
 
           // Update the DB silently in the background
           await InfluencerProfile.updateOne(
@@ -157,6 +288,8 @@ export const getInfluencerById = async (
                  "platforms.youtube.avgViews": avgViews,
                  "platforms.youtube.engagementRate": engagementRate,
                  "platforms.youtube.handle": channelData.snippet.title,
+                 "platforms.youtube.daysSinceLastUpload": daysSinceLastUpload,
+                 "platforms.youtube.videoCount": videoCount,
                  bio: description,
                  totalFollowers: subs,
                  avgEngagementRate: engagementRate
@@ -170,6 +303,8 @@ export const getInfluencerById = async (
               profile.platforms.youtube.avgViews = avgViews;
               profile.platforms.youtube.engagementRate = engagementRate;
               profile.platforms.youtube.handle = channelData.snippet.title;
+              profile.platforms.youtube.daysSinceLastUpload = daysSinceLastUpload;
+              profile.platforms.youtube.videoCount = videoCount;
           }
           profile.bio = description;
           profile.totalFollowers = subs;
@@ -180,7 +315,19 @@ export const getInfluencerById = async (
       }
     }
 
-    res.status(200).json({ success: true, data: profile });
+    const { score, breakdown, aiModelMetrics } = await calculateTrustScore(profile);
+    profile.trustScore = score;
+    profile.trustScoreBreakdown = breakdown;
+    await profile.save();
+
+    const pastCampaigns = await Campaign.find({ selectedInfluencers: profile.user._id }).select("title description budget status createdAt");
+    const profileObj = profile.toObject() as any;
+    profileObj.pastCampaigns = pastCampaigns;
+    profileObj.trustScore = score;
+    profileObj.trustScoreBreakdown = breakdown;
+    profileObj.aiModelMetrics = aiModelMetrics;
+
+    res.status(200).json({ success: true, data: profileObj });
   } catch (err) {
     next(err);
   }
@@ -246,6 +393,8 @@ export const updateMyProfile = async (
              profile.platforms.youtube.subscribers = subs;
              profile.platforms.youtube.avgViews = avgViews;
              profile.platforms.youtube.engagementRate = engagementRate;
+             profile.totalFollowers = subs;
+             profile.avgEngagementRate = engagementRate;
              if (!profile.bio || profile.bio === "Fashion enthusiast and lifestyle content creator based in Dubai. Specializing in sustainable fashion, beauty reviews, and lifestyle vlogs.") {
                  profile.bio = description || profile.bio;
              }
@@ -304,6 +453,279 @@ export const recomputeTrustScore = async (
     if (!profile) return next(new AppError("Influencer not found", 404));
 
     res.status(200).json({ success: true, data: { trustScore } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/influencers/recommendations
+export const getRecommendations = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { targetNiche, country, minFollowers, minTrustScore, minEngagement, search } = req.query as Record<string, string>;
+    
+    const filter: Record<string, unknown> = {};
+
+    if (country) filter.country = { $regex: country, $options: "i" };
+    if (minFollowers) filter.totalFollowers = { $gte: Number(minFollowers) };
+    if (minTrustScore) filter.trustScore = { $gte: Number(minTrustScore) };
+    if (minEngagement) filter.avgEngagementRate = { $gte: Number(minEngagement) };
+    if (search) {
+      const matchingUsers = await User.find({
+        name: { $regex: search, $options: "i" },
+        role: "influencer"
+      }).select("_id");
+      filter.user = { $in: matchingUsers.map((u) => u._id) };
+    }
+
+    // Fetch filtered profiles to score them
+    const profiles = await InfluencerProfile.find(filter).populate("user", "name avatar");
+    
+    // Max followers for normalization
+    let maxFollowers = 1;
+    profiles.forEach(p => {
+      if (p.totalFollowers > maxFollowers) maxFollowers = p.totalFollowers;
+    });
+
+    const scoredProfiles = profiles.map(p => {
+      const engagementScore = Math.min(40, (p.avgEngagementRate / 100) * 40); // max 40 points
+      const followerScore = Math.min(30, (p.totalFollowers / maxFollowers) * 30); // max 30 points
+      
+      let nicheMatchScore = 0;
+      if (targetNiche) {
+        const niches = p.niche.map(n => n.toLowerCase());
+        const tags = p.tags?.map(t => t.toLowerCase()) || [];
+        const target = targetNiche.toLowerCase();
+        
+        if (niches.includes(target) || tags.includes(target)) {
+          nicheMatchScore = 30; // max 30 points
+        } else {
+          // partial match
+          const hasPartial = niches.some(n => n.includes(target)) || tags.some(t => t.includes(target));
+          if (hasPartial) nicheMatchScore = 15;
+        }
+      } else {
+        // If no target niche provided, give average points
+        nicheMatchScore = 15; 
+      }
+
+      const recommendationScore = engagementScore + followerScore + nicheMatchScore;
+      
+      return {
+        ...p.toObject(),
+        recommendationScore: Math.round(recommendationScore)
+      };
+    });
+
+    // Sort by recommendation score descending
+    scoredProfiles.sort((a, b) => b.recommendationScore - a.recommendationScore);
+
+    res.status(200).json({
+      success: true,
+      data: scoredProfiles.slice(0, 20), // return top 20
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/influencers/:id/calculate-trust-score
+export const calculateInfluencerTrustScore = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const profile = await InfluencerProfile.findOne({ user: req.params.id }).populate("user", "name email avatar");
+    if (!profile) return next(new AppError("Influencer not found", 404));
+
+    // Fetch real-time data from YouTube Graph API if it's a youtube seeded account
+    const user = profile.user as any;
+    if (user && user.email && user.email.endsWith("@youtube.test")) {
+      const channelId = user.email.split("@")[0];
+      const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
+      
+      try {
+        let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${API_KEY}`;
+        let statsRes = await fetch(statsURL);
+        let statsData = await statsRes.json() as any;
+        let channelData = statsData.items?.[0];
+        
+        // If direct lowercase ID fails, fallback to searching by channel handle/name!
+        if (!channelData && profile.platforms?.youtube?.handle) {
+           const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(profile.platforms.youtube.handle)}&maxResults=1&key=${API_KEY}`;
+           const searchRes = await fetch(searchURL);
+           const searchData = await searchRes.json() as any;
+           const searchItem = searchData.items?.[0];
+           if (searchItem) {
+              const realChannelId = searchItem.snippet.channelId;
+              const realStatsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${realChannelId}&key=${API_KEY}`;
+              const realStatsRes = await fetch(realStatsURL);
+              const realStatsData = await realStatsRes.json() as any;
+              channelData = realStatsData.items?.[0];
+           }
+        }
+
+        if (channelData) {
+          const subs = parseInt(channelData.statistics.subscriberCount || "0", 10);
+          const views = parseInt(channelData.statistics.viewCount || "0", 10);
+          const videoCount = parseInt(channelData.statistics.videoCount || "0", 10);
+          const description = (channelData.snippet.description || "").substring(0, 490);
+          
+          const avgViews = Math.floor(views / (videoCount || 1)) || 0;
+          const engagementRate = Math.min(100, Number(((avgViews / (subs || 1)) * 100).toFixed(2)));
+
+          let daysSinceLastUpload = profile.platforms?.youtube?.daysSinceLastUpload || 0;
+          const uploadsPlaylistId = channelData.contentDetails?.relatedPlaylists?.uploads;
+          if (uploadsPlaylistId) {
+             try {
+               const playlistRes = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${API_KEY}`);
+               const playlistData = await playlistRes.json() as any;
+               const publishedAt = playlistData.items?.[0]?.snippet?.publishedAt;
+               if (publishedAt) {
+                 const diff = Date.now() - new Date(publishedAt).getTime();
+                 daysSinceLastUpload = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+               }
+             } catch (playlistErr) {
+               console.error("Error fetching playlist items:", playlistErr);
+             }
+          }
+
+          // Update the DB silently in the background
+          await InfluencerProfile.updateOne(
+            { _id: profile._id },
+            { 
+               $set: { 
+                 "platforms.youtube.subscribers": subs,
+                 "platforms.youtube.avgViews": avgViews,
+                 "platforms.youtube.engagementRate": engagementRate,
+                 "platforms.youtube.handle": channelData.snippet.title,
+                 "platforms.youtube.daysSinceLastUpload": daysSinceLastUpload,
+                 "platforms.youtube.videoCount": videoCount,
+                 bio: description,
+                 totalFollowers: subs,
+                 avgEngagementRate: engagementRate
+               } 
+            }
+          );
+          
+          // Update the local object before calculating
+          if (profile.platforms && profile.platforms.youtube) {
+              profile.platforms.youtube.subscribers = subs;
+              profile.platforms.youtube.avgViews = avgViews;
+              profile.platforms.youtube.engagementRate = engagementRate;
+              profile.platforms.youtube.handle = channelData.snippet.title;
+              profile.platforms.youtube.daysSinceLastUpload = daysSinceLastUpload;
+              profile.platforms.youtube.videoCount = videoCount;
+          }
+          profile.bio = description;
+          profile.totalFollowers = subs;
+          profile.avgEngagementRate = engagementRate;
+        }
+      } catch (err) {
+        console.error("Error fetching live YouTube data:", err);
+      }
+    }
+
+    const { score, breakdown, aiModelMetrics } = await calculateTrustScore(profile);
+
+    profile.trustScore = score;
+    profile.trustScoreBreakdown = breakdown;
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      data: { trustScore: score, breakdown, aiModelMetrics }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/influencers/categorize
+export const categorizeInfluencers = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const profiles = await InfluencerProfile.find({}, "niche tags _id");
+    
+    if (profiles.length === 0) {
+       res.status(200).json({ success: true, message: "No profiles to categorize" });
+       return;
+    }
+
+    const assignments = categorizeInfluencersByNiche(profiles, 5); // 5 clusters
+
+    // Update profiles
+    const updatePromises = Object.entries(assignments).map(([id, categoryName]) => {
+      return InfluencerProfile.findByIdAndUpdate(id, { systemCategory: categoryName });
+    });
+
+    await Promise.all(updatePromises);
+
+    res.status(200).json({
+      success: true,
+      message: `Categorized ${profiles.length} influencers`,
+      data: assignments
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/influencers/:id/predict-roi
+export const predictInfluencerROI = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { investment, productValue } = req.body;
+    
+    if (!investment || !productValue) {
+      return next(new AppError("Please provide investment and productValue", 400));
+    }
+
+    const profile = await InfluencerProfile.findOne({ user: req.params.id }).populate("user", "name");
+    if (!profile) return next(new AppError("Influencer not found", 404));
+
+    // 1. Base Reach
+    let baseReach = profile.totalFollowers * 0.1; // Default 10%
+    if (profile.platforms && profile.platforms.youtube && profile.platforms.youtube.avgViews) {
+       baseReach = profile.platforms.youtube.avgViews;
+    }
+
+    // 2. Engagement Rate
+    const engagementRate = profile.avgEngagementRate || 5.0;
+
+    // 3. Trust Score
+    const trustScore = profile.trustScore || 50;
+
+    const mlResult = predictCampaignROIWithML(
+      baseReach,
+      engagementRate,
+      trustScore,
+      Number(investment),
+      Number(productValue)
+    );
+
+    const influencerName = (profile.user as any)?.name || "this influencer";
+
+    res.status(200).json({
+      success: true,
+      data: {
+        estimatedRevenue: mlResult.estimatedRevenue,
+        predictedROI: mlResult.predictedROI,
+        roiPercentage: mlResult.roiPercentage,
+        aiModelMetrics: mlResult.aiModelMetrics,
+        summary: `Based on ${influencerName}'s reach of ~${Math.round(baseReach)}, ${engagementRate.toFixed(1)}% engagement rate, and ${trustScore}/100 Trust Score, we predict ~${mlResult.predictedConversions} sales. At PKR ${productValue} per product, expected revenue is PKR ${mlResult.estimatedRevenue.toLocaleString()}. Subtracting your PKR ${investment} budget yields a net ROI of PKR ${mlResult.predictedROI.toLocaleString()} (${mlResult.roiPercentage}%).`
+      }
+    });
   } catch (err) {
     next(err);
   }
