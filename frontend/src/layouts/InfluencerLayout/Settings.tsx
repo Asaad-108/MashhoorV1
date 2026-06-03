@@ -51,15 +51,25 @@ function Settings() {
     setMessage("");
     setError("");
     try {
+      const existing = await influencerApi.getById(user!._id);
       await influencerApi.updateMyProfile({
         bio,
-        niche: niche ? [niche] : ["Fashion"], // fallback
+        niche: niche ? [niche] : ["Fashion"],
         location: region,
         country: region,
         platforms: {
-          instagram: { handle: instagram, followers: 0, engagementRate: 0 },
-          youtube: { handle: youtube, subscribers: 0, avgViews: 0 },
-        } as any
+          instagram: {
+            handle: instagram,
+            followers: existing.platforms?.instagram?.followers ?? 0,
+            engagementRate: existing.platforms?.instagram?.engagementRate ?? 0,
+          },
+          youtube: {
+            handle: youtube,
+            subscribers: existing.platforms?.youtube?.subscribers ?? 0,
+            avgViews: existing.platforms?.youtube?.avgViews ?? 0,
+            engagementRate: (existing.platforms?.youtube as { engagementRate?: number } | undefined)?.engagementRate ?? 0,
+          },
+        } as any,
       });
       setMessage("Profile updated successfully!");
     } catch (err) {
@@ -117,7 +127,7 @@ function Settings() {
             <div>
               <button className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-medium flex items-center gap-2 mb-2 transition-colors">
                 <img
-                  src="/src/assets/upload.svg"
+                  src="/assets/upload.svg"
                   alt="Upload"
                   width={20}
                   height={20}
@@ -299,7 +309,7 @@ function Settings() {
               <span className="animate-pulse">Saving...</span>
             ) : (
               <>
-                <img src="/src/assets/save.svg" alt="Save" width={20} height={20} />
+                <img src="/assets/save.svg" alt="Save" width={20} height={20} />
                 Save Changes
               </>
             )}

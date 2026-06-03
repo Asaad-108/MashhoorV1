@@ -4,10 +4,21 @@ import { InfluencerProfile } from "./models/InfluencerProfile";
 
 dotenv.config();
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://Asaad:bulbul._.00@cluster0.c662lpl.mongodb.net/?appName=Cluster0";
-const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
+import { getYouTubeApiKey } from "./config/youtube";
+
+const MONGO_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
 
 async function updateYouTubeStats() {
+  const API_KEY = getYouTubeApiKey();
+  if (!API_KEY) {
+    console.error("❌ YOUTUBE_API_KEY is required in .env");
+    process.exit(1);
+  }
+  if (!MONGO_URI) {
+    console.error("❌ MONGODB_URI is required in .env");
+    process.exit(1);
+  }
+
   console.log("=== Synchronizing All Influencers with Live YouTube Data API ===");
 
   try {

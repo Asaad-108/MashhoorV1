@@ -1,9 +1,10 @@
 import "dotenv/config";
 import connectDB from "./config/database";
+import { getYouTubeApiKey } from "./config/youtube";
 import { User } from "./models/User";
 import { InfluencerProfile } from "./models/InfluencerProfile";
 
-const API_KEY = "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
+const API_KEY = getYouTubeApiKey();
 const CATEGORIES = ["Gaming", "Politics", "Tech", "Fashion", "Music", "Cricket"];
 const CHANNELS_PER_CATEGORY = 10;
 const MIN_SUBS = 20000;
@@ -124,6 +125,10 @@ async function fetchChannelsByCategory(category: string) {
 
 export async function seedData() {
     try {
+        if (!API_KEY) {
+            console.error("❌ YOUTUBE_API_KEY is required in .env to seed YouTube influencers.");
+            return;
+        }
         if (process.env.NODE_ENV !== "test") {
             await connectDB();
         }
@@ -144,7 +149,8 @@ export async function seedData() {
                         password: "Password123!",
                         role: "influencer",
                         avatar: channel.Avatar,
-                        isVerified: true
+                        isVerified: true,
+                        hasSignedUp: false,
                     });
                 }
 

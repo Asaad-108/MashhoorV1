@@ -2,12 +2,12 @@ import { WorkingBox } from "../../components";
 
 const workingData = [
   {
-    img: "/src/assets/analytic-photo.jpeg",
+    img: "/assets/analytic-photo.jpeg",
     heading: "Analytics Dashboard",
     text: "Track your campaign performance in real-time",
   },
   {
-    img: "/src/assets/influencer-discovery.jpeg",
+    img: "/assets/influencer-discovery.jpeg",
     heading: "Influencer Discovery",
     text: "Find and connect with verified influencers",
   },

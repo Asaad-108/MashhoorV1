@@ -1,7 +1,7 @@
 import { Request } from "express";
 
 // ─── Auth ────────────────────────────────────────────────────────
-export type UserRole = "business" | "influencer";
+export type UserRole = "business" | "influencer" | "admin";
 
 export interface JwtPayload {
   userId: string;

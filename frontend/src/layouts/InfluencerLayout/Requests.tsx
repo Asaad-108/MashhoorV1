@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import RequestCard from "../../components/RequestCard";
 import { outreachApi } from "../../api";
 import type { Outreach } from "../../api/outreachApi";
@@ -55,6 +56,13 @@ function Requests() {
           <p className="page-subtitle">
             Review and respond to collaboration opportunities
           </p>
+          <p className="text-sm text-purple-600 mt-2">
+            Already invited? Open{" "}
+            <Link to="/influencer-messages" className="font-semibold underline">
+              Campaign Messages
+            </Link>{" "}
+            to read the brand outreach and ask the Mashhoor assistant about campaign details.
+          </p>
         </div>
 
         <div>
@@ -63,7 +71,7 @@ function Requests() {
           ) : requests.length === 0 ? (
             <div className="text-center py-20 text-gray-400 bg-white border border-gray-200 rounded-xl">
               <img
-                src="/src/assets/loader-circle.svg"
+                src="/assets/loader-circle.svg"
                 alt="No requests"
                 className="w-12 h-12 mx-auto mb-4 opacity-50"
               />
@@ -75,7 +83,7 @@ function Requests() {
           ) : pendingRequests.length === 0 ? (
             <div className="text-center py-20 text-gray-400 bg-white border border-gray-200 rounded-xl">
               <img
-                src="/src/assets/loader-circle.svg"
+                src="/assets/loader-circle.svg"
                 alt="No requests"
                 className="w-12 h-12 mx-auto mb-4 opacity-50"
               />

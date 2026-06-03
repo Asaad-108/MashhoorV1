@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { campaignApi, type Campaign } from "../../api/campaignApi";
 
 function EditCampaign() {
@@ -96,6 +96,11 @@ function EditCampaign() {
           <div>
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Edit Campaign</h1>
             <p className="text-gray-500">Update your campaign details and settings</p>
+            {error && (
+              <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                {error}
+              </p>
+            )}
           </div>
           <span className={`status-badge capitalize px-4 py-1.5 text-sm ${
             status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'

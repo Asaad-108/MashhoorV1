@@ -69,13 +69,13 @@ function CampaignCard({
 
         <div className="flex gap-3">
           <button onClick={onViewDetails} className="btn-action-outline">
-            <img src="/src/assets/eye.svg" alt="View" width={16} height={16} />
+            <img src="/assets/eye.svg" alt="View" width={16} height={16} />
             View Details
           </button>
 
           <button onClick={onEdit} className="btn-action-outline">
             <img
-              src="/src/assets/square-pen.svg"
+              src="/assets/square-pen.svg"
               alt="Edit"
               width={16}
               height={16}

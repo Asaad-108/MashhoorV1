@@ -6,7 +6,7 @@ function LandingPage() {
       <div className="HeroSection flex m-5">
         <div className="introSection ">
           <div className="inline-flex gap-1 rounded-full px-3 py-1 transpurple m-5">
-            <img src="/src/assets/sparkle.svg" alt="" />
+            <img src="/assets/sparkle.svg" alt="" />
             <div>AI-Powered Platform</div>
           </div>
           <div className="text-6xl mx-5">
@@ -49,14 +49,14 @@ function LandingPage() {
         </div>
         <div className="imgSection relative">
           <img
-            src="/src/assets/photo.jpeg"
+            src="/assets/photo.jpeg"
             className="rounded-2xl drop-shadow-2xl"
             alt=""
           />
           <div className="bg-white absolute -bottom-4 -left-6 px-4 py-2 rounded-xl shadow-lg">
             <div className="flex justify-center align-middle gap-4">
               <div className="bg-[#00a63d]/20 rounded-full p-4">
-                <img src="/src/assets/circle-check.svg" alt="" />
+                <img src="/assets/circle-check.svg" alt="" />
               </div>
               <div>
                 <div>Campaign Success</div>

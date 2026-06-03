@@ -8,7 +8,7 @@ export type InfluencerPlatforms = {
 
 export type InfluencerProfile = {
   _id: string;
-  user: { _id: string; name: string; email: string; avatar?: string };
+  user: { _id: string; name: string; email: string; avatar?: string; hasSignedUp?: boolean };
   niche: string[];
   location: string;
   country: string;

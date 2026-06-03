@@ -19,7 +19,7 @@ export function useCampaigns(status?: CampaignStatus): UseCampaignsResult {
     setError(null);
     try {
       const result = await campaignApi.getMyCampaigns(status);
-      setCampaigns(result.data);
+      setCampaigns(Array.isArray(result?.data) ? result.data : []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load campaigns");
     } finally {

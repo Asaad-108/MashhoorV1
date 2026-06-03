@@ -1,8 +1,10 @@
 import { Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { Campaign } from "../models/Campaign";
 import { Outreach } from "../models/Outreach";
 import { AppError } from "../middleware/errorHandler";
 import { AuthRequest } from "../types";
+import { inviteInfluencerToCampaign } from "../services/campaignInviteService";
 
 // GET /api/campaigns  (business sees their own)
 export const getMyCampaigns = async (
@@ -12,7 +14,11 @@ export const getMyCampaigns = async (
 ): Promise<void> => {
   try {
     const { status, page = "1", limit = "10" } = req.query as Record<string, string>;
-    const filter: Record<string, unknown> = { business: req.user?.userId };
+    const userId = req.user?.userId;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return next(new AppError("Invalid user session", 401));
+    }
+    const filter: Record<string, unknown> = { business: new mongoose.Types.ObjectId(userId) };
     if (status) filter.status = status;
 
     const pageNum = Math.max(1, Number(page));
@@ -88,8 +94,13 @@ export const createCampaign = async (
       return next(new AppError("title, description, niche, budget, and timeline are required", 400));
     }
 
+    const userId = req.user?.userId;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return next(new AppError("Invalid user session", 401));
+    }
+
     const campaign = await Campaign.create({
-      business: req.user?.userId,
+      business: new mongoose.Types.ObjectId(userId),
       title,
       description,
       niche,
@@ -170,32 +181,43 @@ export const deleteCampaign = async (
   }
 };
 
-// POST /api/campaigns/:id/influencers  (add influencer to campaign)
+// POST /api/campaigns/:id/influencers
+// Adds influencer + sends invite (in-app if registered, email if not)
 export const addInfluencerToCampaign = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { influencerId } = req.body;
-    const campaign = await Campaign.findById(req.params.id);
-    if (!campaign) return next(new AppError("Campaign not found", 404));
+    const { influencerId, message, contactEmail } = req.body;
 
-    if (campaign.business.toString() !== req.user?.userId) {
-      return next(new AppError("Not authorized", 403));
+    if (!influencerId || !message?.trim()) {
+      return next(new AppError("influencerId and message are required", 400));
     }
 
-    const alreadyAdded = campaign.selectedInfluencers.some(
-      (id) => id.toString() === influencerId
-    );
-    if (alreadyAdded) {
-      return next(new AppError("Influencer already added to this campaign", 400));
-    }
+    const result = await inviteInfluencerToCampaign({
+      campaignId: req.params.id,
+      businessId: req.user!.userId,
+      influencerId,
+      message: message.trim(),
+      contactEmail,
+    });
 
-    campaign.selectedInfluencers.push(influencerId);
-    await campaign.save();
+    const responseMessage =
+      result.channel === "email"
+        ? "Influencer added. Mashhoor sent them an email invitation to join the platform."
+        : "Influencer added. They will receive your invitation inside Mashhoor.";
 
-    res.status(200).json({ success: true, message: "Influencer added to campaign", data: campaign });
+    res.status(200).json({
+      success: true,
+      message: responseMessage,
+      data: {
+        campaign: result.campaign,
+        outreach: result.outreach,
+        emailInvite: result.emailInvite,
+        channel: result.channel,
+      },
+    });
   } catch (err) {
     next(err);
   }

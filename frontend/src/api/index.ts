@@ -8,4 +8,5 @@ export * as dashboardApi from "./dashboardApi";
 export type { AuthUser, AuthResponse, UserRole } from "./authApi";
 export type { InfluencerProfile, InfluencerFilters, PaginatedInfluencers } from "./influencerApi";
 export type { Campaign, CreateCampaignPayload, CampaignStatus } from "./campaignApi";
-export type { Outreach, OutreachStatus, Message, Conversation } from "./outreachApi";
+export type { Outreach, OutreachStatus, Message, Conversation, EmailInviteResult } from "./outreachApi";
+export { isPlaceholderInfluencerEmail, isRegisteredOnPlatform } from "./outreachApi";

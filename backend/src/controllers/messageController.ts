@@ -1,8 +1,27 @@
 import { Response, NextFunction } from "express";
 import { Message, Conversation } from "../models/Message";
+import { Campaign } from "../models/Campaign";
+import { User } from "../models/User";
 import { AppError } from "../middleware/errorHandler";
 import { AuthRequest } from "../types";
 import mongoose from "mongoose";
+import { runCampaignAssistantPipeline } from "../services/campaignAssistantService";
+
+const formatMessage = (msg: InstanceType<typeof Message>) => {
+  const m = msg.toObject();
+  const isAssistant =
+    msg.messageType === "assistant_reply" || msg.messageType === "assistant_query";
+  return {
+    ...m,
+    isAssistant,
+    displayName:
+      msg.messageType === "assistant_reply"
+        ? "Mashhoor Assistant"
+        : msg.messageType === "outreach"
+          ? "Campaign invitation"
+          : undefined,
+  };
+};
 
 // GET /api/messages/conversations
 export const getConversations = async (
@@ -17,7 +36,7 @@ export const getConversations = async (
       participants: userId,
     })
       .populate("participants", "name email avatar role")
-      .populate("campaign", "title")
+      .populate("campaign", "title status")
       .sort({ lastMessageAt: -1 });
 
     res.status(200).json({ success: true, data: conversations });
@@ -46,37 +65,49 @@ export const getMessages = async (
     );
     if (!isParticipant) return next(new AppError("Not authorized", 403));
 
-    const messages = await Message.find({
-      $or: [
-        { sender: convo.participants[0], receiver: convo.participants[1] },
-        { sender: convo.participants[1], receiver: convo.participants[0] },
-      ],
-    })
-      .populate("sender", "name avatar")
+    const filter: Record<string, unknown> = convo.campaign
+      ? { campaign: convo.campaign }
+      : {
+          $or: [
+            {
+              sender: convo.participants[0],
+              receiver: convo.participants[1],
+            },
+            {
+              sender: convo.participants[1],
+              receiver: convo.participants[0],
+            },
+          ],
+        };
+
+    const messages = await Message.find(filter)
+      .populate("sender", "name avatar role")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum);
 
-    // Mark as read
     await Message.updateMany(
-      { receiver: req.user?.userId, isRead: false },
+      {
+        receiver: req.user?.userId,
+        isRead: false,
+        campaign: convo.campaign,
+      },
       { isRead: true, readAt: new Date() }
     );
 
-    // Reset unread count
     convo.unreadCount.set(req.user!.userId, 0);
     await convo.save();
 
     res.status(200).json({
       success: true,
-      data: messages.reverse(), // chronological order
+      data: messages.reverse().map(formatMessage),
     });
   } catch (err) {
     next(err);
   }
 };
 
-// POST /api/messages/send
+// POST /api/messages/send — direct human-to-human message
 export const sendMessage = async (
   req: AuthRequest,
   res: Response,
@@ -91,16 +122,16 @@ export const sendMessage = async (
     const senderId = new mongoose.Types.ObjectId(req.user?.userId);
     const receiverObjId = new mongoose.Types.ObjectId(receiverId);
 
-    // Find or create conversation
     let convo = await Conversation.findOne({
       participants: { $all: [senderId, receiverObjId] },
+      ...(campaignId ? { campaign: campaignId } : {}),
     });
 
     if (!convo) {
       convo = await Conversation.create({
         participants: [senderId, receiverObjId],
         ...(campaignId ? { campaign: campaignId } : {}),
-        unreadCount: {},
+        unreadCount: new Map(),
       });
     }
 
@@ -108,10 +139,10 @@ export const sendMessage = async (
       sender: senderId,
       receiver: receiverObjId,
       content,
+      messageType: "direct",
       ...(campaignId ? { campaign: campaignId } : {}),
     });
 
-    // Update conversation metadata
     convo.lastMessage = content;
     convo.lastMessageAt = new Date();
     const receiverUnread = convo.unreadCount.get(receiverId) ?? 0;
@@ -120,7 +151,98 @@ export const sendMessage = async (
 
     const populated = await message.populate("sender", "name avatar");
 
-    res.status(201).json({ success: true, data: populated });
+    res.status(201).json({ success: true, data: formatMessage(populated) });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/messages/:conversationId/ask-assistant — influencer asks campaign chatbot
+export const askCampaignAssistant = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) {
+      return next(new AppError("Message content is required", 400));
+    }
+
+    const userId = req.user?.userId;
+    if (req.user?.role !== "influencer") {
+      return next(new AppError("Only influencers can chat with the campaign assistant", 403));
+    }
+
+    const convo = await Conversation.findById(req.params.conversationId);
+    if (!convo) return next(new AppError("Conversation not found", 404));
+
+    const isParticipant = convo.participants.some((p) => p.toString() === userId);
+    if (!isParticipant) return next(new AppError("Not authorized", 403));
+
+    if (!convo.campaign) {
+      return next(new AppError("No campaign linked to this conversation", 400));
+    }
+    const campaign = await Campaign.findById(convo.campaign);
+    if (!campaign) return next(new AppError("Campaign not found", 404));
+
+    const businessId = convo.participants.find((p) => p.toString() !== userId);
+    const business = businessId ? await User.findById(businessId) : null;
+
+    const priorMessages = await Message.find({
+      campaign: campaign._id,
+      messageType: { $in: ["assistant_query", "assistant_reply"] },
+    })
+      .sort({ createdAt: 1 })
+      .limit(12);
+
+    const chatHistory: { user: string; bot: string }[] = [];
+    for (let i = 0; i < priorMessages.length; i++) {
+      const m = priorMessages[i];
+      if (m.messageType === "assistant_query") {
+        const next = priorMessages[i + 1];
+        if (next?.messageType === "assistant_reply") {
+          chatHistory.push({ user: m.content, bot: next.content });
+        }
+      }
+    }
+
+    const { reply, trace } = await runCampaignAssistantPipeline({
+      userMessage: content.trim(),
+      chatHistory,
+      campaign,
+      businessName: business?.name,
+    });
+
+    const userMsg = await Message.create({
+      sender: new mongoose.Types.ObjectId(userId),
+      receiver: businessId,
+      campaign: campaign._id,
+      outreach: convo.outreach,
+      content: content.trim(),
+      messageType: "assistant_query",
+    });
+
+    const botMsg = await Message.create({
+      receiver: new mongoose.Types.ObjectId(userId),
+      campaign: campaign._id,
+      outreach: convo.outreach,
+      content: reply,
+      messageType: "assistant_reply",
+      assistantTrace: trace,
+    });
+
+    convo.lastMessage = reply.slice(0, 160);
+    convo.lastMessageAt = new Date();
+    await convo.save();
+
+    res.status(201).json({
+      success: true,
+      data: {
+        userMessage: formatMessage(userMsg),
+        assistantMessage: formatMessage(botMsg),
+      },
+    });
   } catch (err) {
     next(err);
   }

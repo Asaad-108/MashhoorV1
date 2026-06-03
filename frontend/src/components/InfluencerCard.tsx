@@ -43,7 +43,7 @@ function InfluencerCard({
           <div className="flex items-center">
             <h3 className="font-bold text-gray-900 text-lg">{name}</h3>
             <img
-              src="/src/assets/blue-tick.svg"
+              src="/assets/blue-tick.svg"
               alt="Logo"
               width={17}
               height={17}
@@ -61,17 +61,17 @@ function InfluencerCard({
       </div>
 
       <div className="info-row">
-        <img src="/src/assets/map-pin.svg" alt="Logo" width={16} height={16} />
+        <img src="/assets/map-pin.svg" alt="Logo" width={16} height={16} />
         {location}
       </div>
 
       <div className="info-row">
-        <img src="/src/assets/users.svg" alt="Logo" width={16} height={16} />
+        <img src="/assets/users.svg" alt="Logo" width={16} height={16} />
         {followers} followers
       </div>
 
       <div className="info-row">
-        <img src="/src/assets/heart.svg" alt="Logo" width={16} height={16} />
+        <img src="/assets/heart.svg" alt="Logo" width={16} height={16} />
         {engagement} engagement
       </div>
 
@@ -85,7 +85,7 @@ function InfluencerCard({
 
       <div className="flex gap-3 mt-auto">
         <button className="btn-card-view" onClick={() => navigate(`/influencer/${id}`)}>View Profile</button>
-        <button className="btn-card-contact" onClick={onContact}>Contact</button>
+        <button className="btn-card-contact" onClick={onContact}>Add to Campaign</button>
       </div>
     </div>
   );

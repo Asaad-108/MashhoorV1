@@ -13,6 +13,8 @@ export interface IInfluencerProfile extends Document {
       engagementRate: number;
       avgLikes: number;
       avgComments: number;
+      daysSinceLastPost?: number;
+      postCount?: number;
     };
     youtube?: {
       handle: string;
@@ -71,6 +73,8 @@ const InfluencerProfileSchema = new Schema<IInfluencerProfile>(
         engagementRate: { type: Number, default: 0 },
         avgLikes: { type: Number, default: 0 },
         avgComments: { type: Number, default: 0 },
+        daysSinceLastPost: { type: Number, default: undefined },
+        postCount: { type: Number, default: undefined },
       },
       youtube: {
         handle: String,

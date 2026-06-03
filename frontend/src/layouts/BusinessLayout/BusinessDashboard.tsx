@@ -1,26 +1,33 @@
-import { Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { dashboardApi } from "../../api";
+import { getBusinessDashboardStats, type BusinessDashboardStats } from "../../api/dashboardApi";
 
 function BusinessDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<any>(null);
+  const location = useLocation();
+  const [stats, setStats] = useState<BusinessDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await dashboardApi.getBusinessDashboardStats();
-        setStats(res.data);
-      } catch (err) {
-        console.error("Failed to load dashboard stats", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      setLoadError("");
+      const data = await getBusinessDashboardStats();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to load dashboard stats", err);
+      setLoadError(err instanceof Error ? err.message : "Failed to load analytics");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Refetch whenever user lands on this page (e.g. after creating a campaign)
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats, location.key]);
 
   const maxCampaigns = Math.max(...(stats?.campaignActivity?.map((a: any) => a.count) || [0]), 1);
   const maxEngagement = Math.max(...(stats?.engagementTrend?.map((a: any) => a.rate) || [0]), 5);
@@ -30,11 +37,16 @@ function BusinessDashboard() {
       <div className="p-8 max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {user?.name.split(" ")[0] || "Business User"}
+            Welcome back, {user?.name?.split(" ")[0] || "Business User"}
           </h1>
           <p className="text-gray-500 mt-1">
             Here's what's happening with your campaigns today.
           </p>
+          {loadError && (
+            <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+              {loadError}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-4 gap-6 mb-8">
@@ -43,7 +55,7 @@ function BusinessDashboard() {
               <span className="stat-label">Total Campaigns</span>
               <div className="text-gray-400">
                 <img
-                  src="/src/assets/globe.svg"
+                  src="/assets/globe.svg"
                   alt="Campaigns"
                   width={20}
                   height={20}
@@ -59,7 +71,7 @@ function BusinessDashboard() {
               <span className="stat-label">Influencers Contacted</span>
               <div className="text-gray-400">
                 <img
-                  src="/src/assets/user.svg"
+                  src="/assets/user.svg"
                   alt="Contacted"
                   width={20}
                   height={20}
@@ -75,7 +87,7 @@ function BusinessDashboard() {
               <span className="stat-label">Shortlisted</span>
               <div className="text-gray-400">
                 <img
-                  src="/src/assets/eye.svg"
+                  src="/assets/eye.svg"
                   alt="Shortlisted"
                   width={20}
                   height={20}
@@ -91,7 +103,7 @@ function BusinessDashboard() {
               <span className="stat-label">Avg. Engagement</span>
               <div className="text-gray-400">
                 <img
-                  src="/src/assets/chart-line.svg"
+                  src="/assets/chart-line.svg"
                   alt="Engagement"
                   width={20}
                   height={20}
@@ -113,7 +125,7 @@ function BusinessDashboard() {
           <div className="flex flex-col sm:flex-row gap-4">
             <Link to="/create-campaigns" className="btn-create-campaign">
               <img
-                src="/src/assets/plus (1).svg"
+                src="/assets/plus (1).svg"
                 alt="Create"
                 width={20}
                 height={20}
@@ -123,7 +135,7 @@ function BusinessDashboard() {
 
             <Link to="/find-influencers" className="search-influencer w-full flex items-center gap-2 justify-start decoration-transparent">
               <img
-                src="/src/assets/search.svg"
+                src="/assets/search.svg"
                 alt="Search"
                 width={20}
                 height={20}
@@ -140,16 +152,16 @@ function BusinessDashboard() {
 
             <div className="flex items-end justify-between h-48 pt-4 pb-2 border-b border-gray-100">
               <div className="w-full flex justify-around items-end h-full">
-                {stats?.campaignActivity ? stats.campaignActivity.map((item: any, i: number) => (
+                {loading ? (
+                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">Loading...</div>
+                ) : stats?.campaignActivity ? stats.campaignActivity.map((item, i) => (
                   <div key={i} className="w-12 bg-[#8b5cf6] rounded-t-md transition-all duration-500 hover:bg-purple-700 relative group" 
-                       style={{ height: item.count > 0 ? `${Math.max((item.count / maxCampaigns) * 100, 5)}%` : "0%" }}>
+                       style={{ height: item.count > 0 ? `${Math.max((item.count / maxCampaigns) * 100, 5)}%` : "4px" }}>
                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                       {item.count}
                     </div>
                   </div>
-                )) : (
-                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">Loading...</div>
-                )}
+                )) : null}
               </div>
             </div>
             <div className="flex justify-around mt-2 text-xs text-gray-400">
@@ -167,7 +179,9 @@ function BusinessDashboard() {
 
             <div className="relative h-48 pt-4 pb-2 border-b border-gray-100">
               <div className="w-full h-full relative">
-                {stats?.engagementTrend ? (
+                {loading ? (
+                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">Loading...</div>
+                ) : stats?.engagementTrend ? (
                   <svg className="w-full h-full" viewBox="0 0 300 150" preserveAspectRatio="none">
                     <line x1="0" y1="37" x2="300" y2="37" stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4" />
                     <line x1="0" y1="75" x2="300" y2="75" stroke="#f3f4f6" strokeWidth="1" strokeDasharray="4" />
@@ -188,11 +202,7 @@ function BusinessDashboard() {
                       </circle>
                     ))}
                   </svg>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">
-                    Loading...
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
             <div className="flex justify-around mt-2 text-xs text-gray-400">
@@ -203,6 +213,47 @@ function BusinessDashboard() {
               )}
             </div>
           </div>
+        </div>
+
+        <div className="dashboard-card mb-8">
+          <div className="mb-4 flex justify-between items-center">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-lg">Your Campaigns</h3>
+              <p className="text-sm text-gray-500">Latest campaigns you created</p>
+            </div>
+            <Link to="/business-campaigns" className="text-sm font-medium text-purple-600 hover:underline">
+              View all →
+            </Link>
+          </div>
+          {loading ? (
+            <div className="text-gray-400 py-4">Loading campaigns...</div>
+          ) : stats?.recentCampaigns && stats.recentCampaigns.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {stats.recentCampaigns.map((campaign) => (
+                <Link
+                  key={campaign._id}
+                  to={`/business-campaign/${campaign._id}`}
+                  className="activity-item hover:bg-gray-50 transition-colors"
+                >
+                  <div>
+                    <div className="text-gray-900 font-medium">{campaign.title}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Created {new Date(campaign.createdAt).toLocaleDateString()}
+                      {campaign.budget?.total != null && ` · Rs ${campaign.budget.total.toLocaleString()}`}
+                    </div>
+                  </div>
+                  <span className="tag tag-purple capitalize">{campaign.status}</span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400 border border-dashed border-gray-200 rounded-lg">
+              <p>No campaigns yet.</p>
+              <Link to="/create-campaigns" className="text-sm text-purple-600 font-medium mt-2 inline-block hover:underline">
+                Create your first campaign →
+              </Link>
+            </div>
+          )}
         </div>
 
         <div className="dashboard-card">

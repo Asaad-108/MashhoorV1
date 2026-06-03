@@ -28,7 +28,7 @@ function RequestCard({
   onDecline,
 }: RequestCardProps) {
   return (
-    <div className="request-card">
+    <div className="request-card" data-request-id={requestId}>
       <div className="card-header">
         <h3 className="req-title">{title}</h3>
         <span className="brand-badge">{brand}</span>
@@ -66,7 +66,7 @@ function RequestCard({
         <div className="action-row">
           <button className="btn-req btn-accept" onClick={onAccept}>
             <img
-              src="/src/assets/check.svg"
+              src="/assets/check.svg"
               alt="Accept"
               width={16}
               height={16}
@@ -75,12 +75,12 @@ function RequestCard({
           </button>
 
           <button className="btn-req btn-decline" onClick={onDecline}>
-            <img src="/src/assets/x.svg" alt="Decline" width={16} height={16} />
+            <img src="/assets/x.svg" alt="Decline" width={16} height={16} />
             Decline
           </button>
 
           <Link to={`/campaign-details/${campaignId}`} className="btn-req btn-view">
-            <img src="/src/assets/eye.svg" alt="View" width={16} height={16} />
+            <img src="/assets/eye.svg" alt="View" width={16} height={16} />
             View Details
           </Link>
         </div>

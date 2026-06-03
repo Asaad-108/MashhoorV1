@@ -22,7 +22,7 @@ function Campaigns() {
             <p className="text-gray-500 mt-1">Manage all your influencer marketing campaigns</p>
           </div>
           <Link to="/create-campaigns" className="btn-create-purple whitespace-nowrap">
-            <img src="/src/assets/plus (1).svg" alt="Create" width={20} height={20} />
+            <img src="/assets/plus (1).svg" alt="Create" width={20} height={20} />
             Create Campaign
           </Link>
         </div>

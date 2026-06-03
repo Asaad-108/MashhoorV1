@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { InfluencerCard } from "../../components";
 import { useInfluencers } from "../../hooks/useInfluencers";
-import { campaignApi, outreachApi, influencerApi, type Campaign } from "../../api";
+import { campaignApi, isPlaceholderInfluencerEmail, isRegisteredOnPlatform, influencerApi, type Campaign } from "../../api";
 import type { InfluencerProfile } from "../../api/influencerApi";
 
 const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Tech"];
@@ -19,10 +19,13 @@ function FindInfluencers() {
     isOpen: boolean;
     influencerId: string;
     influencerName: string;
+    influencerEmail?: string;
+    hasSignedUp?: boolean;
   }>({ isOpen: false, influencerId: "", influencerName: "" });
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = useState("");
   const [outreachMessage, setOutreachMessage] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
@@ -42,19 +45,40 @@ function FindInfluencers() {
     }
   }, [contactModal.isOpen]);
 
-  const handleSendOutreach = async () => {
-    if (!selectedCampaignId || !outreachMessage) return;
+  const isOnPlatform = isRegisteredOnPlatform({ hasSignedUp: contactModal.hasSignedUp });
+  const needsContactEmail =
+    !isOnPlatform && isPlaceholderInfluencerEmail(contactModal.influencerEmail);
+
+  const handleAddToCampaign = async () => {
+    if (!selectedCampaignId || !outreachMessage.trim() || !contactModal.influencerId) return;
+    if (needsContactEmail && !contactEmail.trim()) {
+      showToast("Add their real email — Mashhoor will send the invitation automatically.", "error");
+      return;
+    }
     setIsSending(true);
     try {
-      await outreachApi.send(selectedCampaignId, contactModal.influencerId, outreachMessage);
-      await campaignApi.addInfluencer(selectedCampaignId, contactModal.influencerId);
+      const result = await campaignApi.addInfluencer(
+        selectedCampaignId,
+        contactModal.influencerId,
+        outreachMessage,
+        needsContactEmail ? contactEmail.trim() : undefined
+      );
       setContactModal({ isOpen: false, influencerId: "", influencerName: "" });
       setOutreachMessage("");
+      setContactEmail("");
       setSelectedCampaignId("");
-      showToast("Outreach sent successfully! Influencer added to campaign.", "success");
-    } catch (err: any) {
+      showToast(
+        result.channel === "email"
+          ? "Added to campaign. Mashhoor emailed them an invitation to join."
+          : "Added to campaign. They will see your invitation in Mashhoor.",
+        "success"
+      );
+    } catch (err: unknown) {
       console.error(err);
-      showToast(err.response?.data?.message || "Failed to send outreach. They might already be contacted.", "error");
+      showToast(
+        err instanceof Error ? err.message : "Failed to add influencer. They may already be on this campaign.",
+        "error"
+      );
     } finally {
       setIsSending(false);
     }
@@ -142,7 +166,7 @@ function FindInfluencers() {
         {/* Filter Sidebar */}
         <div className="w-full md:w-1/4 bg-white border border-gray-200 rounded-xl p-6 h-fit md:sticky top-24">
           <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
-            <img src="/src/assets/funnel.svg" alt="Filters" width={17} height={17} />
+            <img src="/assets/funnel.svg" alt="Filters" width={17} height={17} />
             <h2 className="font-bold text-lg text-gray-900">Filters</h2>
           </div>
 
@@ -213,7 +237,7 @@ function FindInfluencers() {
           {/* Search bar */}
           <div className="flex gap-4 mb-6">
             <div className="bg-white p-3 rounded-lg border border-gray-200 flex-1 flex items-center gap-3 shadow-sm">
-              <img src="/src/assets/search.svg" alt="Search" width={17} height={17} />
+              <img src="/assets/search.svg" alt="Search" width={17} height={17} />
               <input
                 type="text"
                 value={search}
@@ -305,11 +329,16 @@ function FindInfluencers() {
                   engagement={`${inf.avgEngagementRate.toFixed(1)}%`}
                   trustScore={inf.trustScore}
                   systemCategory={inf.systemCategory}
-                  onContact={() => setContactModal({
-                    isOpen: true,
-                    influencerId: inf.user?._id ?? "",
-                    influencerName: inf.user?.name ?? "Unknown"
-                  })}
+                  onContact={() => {
+                    setContactEmail("");
+                    setContactModal({
+                      isOpen: true,
+                      influencerId: inf.user?._id ?? "",
+                      influencerName: inf.user?.name ?? "Unknown",
+                      influencerEmail: inf.user?.email,
+                      hasSignedUp: inf.user?.hasSignedUp,
+                    });
+                  }}
                 />
               ))}
             </div>
@@ -318,7 +347,7 @@ function FindInfluencers() {
           {/* Empty state */}
           {!loading && displayedInfluencers.length === 0 && !error && (
             <div className="text-center py-16 text-gray-400">
-              <img src="/src/assets/search.svg" alt="" className="mx-auto mb-4 opacity-30" width={48} height={48} />
+              <img src="/assets/search.svg" alt="" className="mx-auto mb-4 opacity-30" width={48} height={48} />
               <p className="text-lg">No influencers found matching your filters.</p>
               <button onClick={resetFilters} className="mt-4 text-purple-600 hover:underline text-sm">
                 Clear filters
@@ -365,9 +394,29 @@ function FindInfluencers() {
       {contactModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold mb-4">Contact {contactModal.influencerName}</h3>
+            <h3 className="text-xl font-bold mb-1">Add {contactModal.influencerName} to campaign</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {isOnPlatform
+                ? "They are registered on Mashhoor — they will receive your invite inside the app."
+                : "This creator is not registered yet. Mashhoor will email them an invitation automatically."}
+            </p>
             
             <div className="space-y-4">
+              {needsContactEmail && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Their email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    placeholder="creator@email.com"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 outline-none focus:border-purple-500"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Select Campaign</label>
                 <select
@@ -402,11 +451,16 @@ function FindInfluencers() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleSendOutreach}
-                  disabled={isSending || !selectedCampaignId || !outreachMessage.trim()}
+                  onClick={handleAddToCampaign}
+                  disabled={
+                    isSending ||
+                    !selectedCampaignId ||
+                    !outreachMessage.trim() ||
+                    (needsContactEmail && !contactEmail.trim())
+                  }
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50"
                 >
-                  {isSending ? "Sending..." : "Send Request"}
+                  {isSending ? "Adding..." : "Add to Campaign"}
                 </button>
               </div>
             </div>

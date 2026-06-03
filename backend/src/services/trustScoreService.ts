@@ -1,91 +1,200 @@
 import { IInfluencerProfile } from "../models/InfluencerProfile";
 import { Campaign } from "../models/Campaign";
 import { calculateTrustScoreWithML } from "./mlService";
+import {
+  getUnifiedPlatformMetrics,
+  type PrimaryPlatform,
+} from "./platformMetricsService";
 
-export const calculateTrustScore = async (profile: IInfluencerProfile): Promise<{ score: number, breakdown: any, aiModelMetrics?: any }> => {
-  const followers = profile.totalFollowers || 0;
-  const engagementRate = profile.avgEngagementRate || 0;
-  const avgViews = profile.platforms?.youtube?.avgViews || 0;
+function scoreEngagementAuthenticity(
+  platform: PrimaryPlatform,
+  followers: number,
+  engagementRate: number,
+  isVerified: boolean
+): number {
+  const boost = isVerified ? 5 : 0;
+
+  if (platform === "instagram") {
+    if (followers < 10000) {
+      if (engagementRate >= 2 && engagementRate <= 12) return 95 + boost;
+      if (engagementRate > 25) return 35;
+      if (engagementRate < 0.3) return 8;
+      return 72 + boost;
+    }
+    if (followers < 100000) {
+      if (engagementRate >= 1 && engagementRate <= 6) return 95 + boost;
+      if (engagementRate > 15) return 38;
+      if (engagementRate < 0.15) return 6;
+      return 70 + boost;
+    }
+    if (engagementRate >= 0.5 && engagementRate <= 4) return 92 + boost;
+    if (engagementRate > 10) return 40;
+    if (engagementRate < 0.1) return 5;
+    return 68 + boost;
+  }
+
+  if (platform === "tiktok") {
+    if (engagementRate >= 3 && engagementRate <= 18) return 94 + boost;
+    if (engagementRate > 35) return 38;
+    if (engagementRate < 0.5) return 10;
+    return 72 + boost;
+  }
+
+  // YouTube (default)
+  if (followers < 10000) {
+    if (engagementRate >= 3 && engagementRate <= 15) return 95 + boost;
+    if (engagementRate > 30) return 40;
+    if (engagementRate < 0.5) return 10;
+    return 75 + boost;
+  }
+  if (engagementRate >= 1.5 && engagementRate <= 8) return 95 + boost;
+  if (engagementRate > 20) return 35;
+  if (engagementRate < 0.2) return 5;
+  return 75 + boost;
+}
+
+function scoreFollowerQuality(
+  platform: PrimaryPlatform,
+  followers: number,
+  interactionRate: number,
+  avgLikes: number,
+  avgComments: number
+): number {
+  if (platform === "instagram") {
+    const rate = interactionRate > 0 ? interactionRate : 0;
+    if (followers > 0 && avgLikes === 0 && avgComments === 0 && rate === 0) {
+      return followers < 500 ? 12 : 8;
+    }
+    if (rate >= 0.04) return Math.min(100, 88 + Math.floor(rate * 250));
+    if (rate >= 0.015) return 72 + Math.floor((rate - 0.015) * 1200);
+    if (rate >= 0.005) return 45 + Math.floor((rate - 0.005) * 2700);
+    if (rate > 0) return Math.max(12, Math.floor(rate * 8000));
+    return followers < 500 ? 15 : 6;
+  }
+
+  if (platform === "tiktok") {
+    if (interactionRate >= 0.08) return Math.min(100, 85 + Math.floor(interactionRate * 120));
+    if (interactionRate >= 0.03) return 70 + Math.floor((interactionRate - 0.03) * 300);
+    if (interactionRate > 0) return Math.max(10, Math.floor(interactionRate * 2000));
+    return followers < 500 ? 15 : 8;
+  }
+
+  // YouTube: views-to-subscriber ratio
+  const viewRatio = interactionRate;
+  if (viewRatio >= 0.15) return Math.min(100, 85 + Math.floor(viewRatio * 50));
+  if (viewRatio >= 0.05) return 70 + Math.floor((viewRatio - 0.05) * 150);
+  if (viewRatio > 0) return Math.max(10, Math.floor(viewRatio * 1400));
+  return followers < 500 ? 15 : 5;
+}
+
+function scoreContentConsistency(
+  platform: PrimaryPlatform,
+  followers: number,
+  daysSinceLastContent: number | undefined,
+  contentCount: number | undefined,
+  engagementRate: number,
+  avgLikes: number,
+  isVerified: boolean
+): number {
+  const boost = isVerified ? 5 : 0;
+
+  if (contentCount !== undefined && contentCount === 0) return 0;
+
+  if (daysSinceLastContent !== undefined && daysSinceLastContent >= 0) {
+    if (daysSinceLastContent <= 3) return 95 + boost;
+    if (daysSinceLastContent <= 7) return 90 + boost;
+    if (daysSinceLastContent <= 14) return 82 + boost;
+    if (daysSinceLastContent <= 30) return 75 - Math.floor(daysSinceLastContent / 4) + boost;
+    if (daysSinceLastContent <= 60) return 55 - Math.floor((daysSinceLastContent - 30) / 3) + boost;
+    if (daysSinceLastContent <= 90) return 35 - Math.floor((daysSinceLastContent - 60) / 5) + boost;
+    return Math.max(5, 18 - Math.floor(daysSinceLastContent / 30));
+  }
+
+  if (platform === "instagram") {
+    if (avgLikes > 0 && engagementRate >= 1) {
+      const base = 65 + Math.min(25, Math.floor(engagementRate * 2));
+      return Math.min(95, base + boost);
+    }
+    if (followers > 1000 && engagementRate > 0) return 50 + boost;
+    if (followers > 0 && avgLikes === 0) return 25;
+    return followers < 500 ? 10 : 35;
+  }
+
+  if (contentCount !== undefined && contentCount > 0) {
+    return Math.min(60, 30 + contentCount * 2);
+  }
+
+  return followers < 500 ? 10 : 40;
+}
+
+export const calculateTrustScore = async (
+  profile: IInfluencerProfile
+): Promise<{ score: number; breakdown: any; aiModelMetrics?: any }> => {
+  const metrics = getUnifiedPlatformMetrics(profile);
+  const {
+    primaryPlatform,
+    followers,
+    engagementRate,
+    interactionRate,
+    daysSinceLastContent,
+    contentCount,
+    avgLikes,
+    avgComments,
+  } = metrics;
+
   const isVerified = profile.isVerified || false;
 
-  // 1. Commercial Track Record (Only check campaigns done inside platform & business feedback)
   const pastCampaigns = await Campaign.find({ selectedInfluencers: profile.user });
   const campaignCount = pastCampaigns.length;
   let collaborationHistory = 0;
 
   if (campaignCount > 0) {
-    const influencerReviews = pastCampaigns.flatMap(c => (c.reviews || []).filter(r => r.influencer.toString() === profile.user.toString()));
+    const influencerReviews = pastCampaigns.flatMap((c) =>
+      (c.reviews || []).filter((r) => r.influencer.toString() === profile.user.toString())
+    );
     if (influencerReviews.length > 0) {
-      const avgRating = influencerReviews.reduce((sum, r) => sum + r.rating, 0) / influencerReviews.length;
+      const avgRating =
+        influencerReviews.reduce((sum, r) => sum + r.rating, 0) / influencerReviews.length;
       collaborationHistory = Math.round((avgRating / 5) * 100);
     } else {
       collaborationHistory = Math.min(100, 70 + campaignCount * 10);
     }
   }
 
-  // 2. Content Consistency (Checking real upload date & video count from YouTube API)
-  let contentConsistency = 80;
-  const daysSinceLastUpload = profile.platforms?.youtube?.daysSinceLastUpload;
-  const videoCount = profile.platforms?.youtube?.videoCount;
+  const engagementAuthenticity = scoreEngagementAuthenticity(
+    primaryPlatform,
+    followers,
+    engagementRate,
+    isVerified
+  );
 
-  if (videoCount === 0) {
-    contentConsistency = 0; // 0 videos means 0% consistency!
-  } else if (daysSinceLastUpload !== undefined && daysSinceLastUpload > 0) {
-    if (daysSinceLastUpload <= 7) {
-      contentConsistency = 95 + (isVerified ? 5 : 0);
-    } else if (daysSinceLastUpload <= 30) {
-      contentConsistency = 85 - Math.floor(daysSinceLastUpload / 3);
-    } else if (daysSinceLastUpload <= 90) {
-      contentConsistency = 65 - Math.floor((daysSinceLastUpload - 30) / 2);
-    } else if (daysSinceLastUpload <= 180) {
-      contentConsistency = 40 - Math.floor((daysSinceLastUpload - 90) / 4);
-    } else {
-      contentConsistency = Math.max(5, 20 - Math.floor(daysSinceLastUpload / 30));
-    }
-  } else if (videoCount !== undefined && videoCount > 0) {
-    // Has videos but no recent upload date found
-    contentConsistency = Math.min(60, 30 + videoCount * 2);
-  } else {
-    contentConsistency = followers < 500 ? 10 : 40;
-  }
+  const followerQuality = scoreFollowerQuality(
+    primaryPlatform,
+    followers,
+    interactionRate,
+    avgLikes,
+    avgComments
+  );
 
-  // 3. Engagement Authenticity (Real engagement rate vs industry benchmark)
-  let engagementAuthenticity = 80;
-  if (followers < 10000) {
-    // Nano benchmark ~5%
-    if (engagementRate >= 3 && engagementRate <= 15) engagementAuthenticity = 95 + (isVerified ? 5 : 0);
-    else if (engagementRate > 30) engagementAuthenticity = 40; // viral/bot spike
-    else if (engagementRate < 0.5) engagementAuthenticity = 10; // dead bots
-    else engagementAuthenticity = 75;
-  } else {
-    // Macro/Mega benchmark ~2.5%
-    if (engagementRate >= 1.5 && engagementRate <= 8) engagementAuthenticity = 95 + (isVerified ? 5 : 0);
-    else if (engagementRate > 20) engagementAuthenticity = 35; // unrealistic spike
-    else if (engagementRate < 0.2) engagementAuthenticity = 5; // dead bots
-    else engagementAuthenticity = 75;
-  }
-
-  // 4. Follower Quality (Active viewer retention ratio)
-  let followerQuality = 75;
-  const viewRatio = followers > 0 ? avgViews / followers : 0;
-  if (viewRatio >= 0.15) {
-    followerQuality = Math.min(100, 85 + Math.floor(viewRatio * 50));
-  } else if (viewRatio >= 0.05) {
-    followerQuality = 70 + Math.floor((viewRatio - 0.05) * 150);
-  } else if (viewRatio > 0) {
-    followerQuality = Math.max(10, Math.floor(viewRatio * 1400));
-  } else {
-    followerQuality = followers < 500 ? 15 : 5; // dead bot account
-  }
+  const contentConsistency = scoreContentConsistency(
+    primaryPlatform,
+    followers,
+    daysSinceLastContent,
+    contentCount,
+    engagementRate,
+    avgLikes,
+    isVerified
+  );
 
   const breakdown = {
-    engagementAuthenticity: Math.round(Math.max(0, Math.min(100, engagementAuthenticity))),
+    engagementAuthenticity: Math.round(
+      Math.max(0, Math.min(100, engagementAuthenticity))
+    ),
     followerQuality: Math.round(Math.max(0, Math.min(100, followerQuality))),
     contentConsistency: Math.round(Math.max(0, Math.min(100, contentConsistency))),
-    collaborationHistory: Math.round(Math.max(0, Math.min(100, collaborationHistory)))
+    collaborationHistory: Math.round(Math.max(0, Math.min(100, collaborationHistory))),
   };
 
-  // We pass the 4 exact calculated pillars directly into the upgraded ML Ridge Regressor!
   const mlResult = calculateTrustScoreWithML(
     breakdown.followerQuality,
     breakdown.engagementAuthenticity,
@@ -93,26 +202,34 @@ export const calculateTrustScore = async (profile: IInfluencerProfile): Promise<
     breakdown.collaborationHistory
   );
 
-  // E.g., if collaborationHistory === 0 (new creator to Mashhoor but established on YouTube),
-  // we do NOT penalize their Trust Score with a 0 for platform experience!
-  // Instead, we evaluate their Trust Score based 100% on their active YouTube Audience Pillars!
   let activePillarAverage = 0;
   if (campaignCount > 0) {
-    activePillarAverage = (breakdown.engagementAuthenticity + breakdown.followerQuality + breakdown.contentConsistency + breakdown.collaborationHistory) / 4;
+    activePillarAverage =
+      (breakdown.engagementAuthenticity +
+        breakdown.followerQuality +
+        breakdown.contentConsistency +
+        breakdown.collaborationHistory) /
+      4;
   } else {
-    activePillarAverage = (breakdown.engagementAuthenticity + breakdown.followerQuality + breakdown.contentConsistency) / 3;
+    activePillarAverage =
+      (breakdown.engagementAuthenticity +
+        breakdown.followerQuality +
+        breakdown.contentConsistency) /
+      3;
   }
 
-  // To ensure the ML model prediction doesn't inflate small accounts or deflate large accounts,
-  // we apply a dynamic scaling factor based on their active pillar health!
   const mlWeight = 0.3;
   const pillarWeight = 0.7;
-  
-  const accurateScore = Math.round(mlWeight * mlResult.trustScore + pillarWeight * activePillarAverage);
+  const accurateScore = Math.round(
+    mlWeight * mlResult.trustScore + pillarWeight * activePillarAverage
+  );
 
   return {
     score: Math.max(0, Math.min(100, accurateScore)),
     breakdown,
-    aiModelMetrics: mlResult.aiModelMetrics
+    aiModelMetrics: {
+      ...mlResult.aiModelMetrics,
+      primaryPlatform,
+    },
   };
 };

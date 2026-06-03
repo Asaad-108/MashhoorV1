@@ -3,6 +3,7 @@ import {
   getConversations,
   getMessages,
   sendMessage,
+  askCampaignAssistant,
 } from "../controllers/messageController";
 import { protect } from "../middleware/auth";
 
@@ -13,8 +14,8 @@ const router = Router();
 
 router.get("/conversations", protect, getConversations);
 router.post("/send", protect, sendMessage);
+router.post("/:conversationId/ask-assistant", protect, askCampaignAssistant);
 
-// Parameterized route LAST
 router.get("/:conversationId", protect, getMessages);
 
 export default router;

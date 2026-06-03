@@ -1,8 +1,11 @@
 import { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { User } from "../models/User";
 import { InfluencerProfile } from "../models/InfluencerProfile";
+import { EmailInvite } from "../models/EmailInvite";
 import { AppError } from "../middleware/errorHandler";
+import { sendEmail, isEmailConfigured } from "../services/emailService";
 import { AuthRequest, JwtPayload, UserRole } from "../types";
 
 const signToken = (userId: string, role: UserRole, email: string): string => {
@@ -21,6 +24,19 @@ const signRefreshToken = (userId: string): string => {
   );
 };
 
+const issueAuthResponse = (user: InstanceType<typeof User>) => ({
+  user: {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isVerified: user.isVerified,
+    hasSignedUp: user.hasSignedUp,
+  },
+  token: signToken(user._id.toString(), user.role, user.email),
+  refreshToken: signRefreshToken(user._id.toString()),
+});
+
 // POST /api/auth/register
 export const register = async (
   req: Request,
@@ -28,7 +44,7 @@ export const register = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, inviteToken } = req.body;
 
     if (!name || !email || !password || !role) {
       return next(new AppError("All fields are required", 400));
@@ -38,18 +54,76 @@ export const register = async (
       return next(new AppError("Role must be business or influencer", 400));
     }
 
-    const existing = await User.findOne({ email });
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    if (inviteToken) {
+      const invite = await EmailInvite.findOne({ inviteToken });
+      if (!invite) return next(new AppError("Invalid or expired invitation link", 400));
+      if (invite.status === "registered") {
+        return next(new AppError("This invitation has already been used. Please log in.", 400));
+      }
+      if (normalizedEmail !== invite.email.toLowerCase()) {
+        return next(
+          new AppError("Use the same email address that received the campaign invitation", 400)
+        );
+      }
+      if (role !== "influencer") {
+        return next(new AppError("Campaign invitations are for influencer accounts only", 400));
+      }
+
+      const existing = await User.findOne({ email: normalizedEmail }).select("+password");
+      if (existing) {
+        if (existing.hasSignedUp) {
+          return next(new AppError("Email already registered. Please log in instead.", 409));
+        }
+        existing.name = name;
+        existing.password = password;
+        existing.hasSignedUp = true;
+        existing.role = "influencer";
+        await existing.save();
+
+        const hasProfile = await InfluencerProfile.exists({ user: existing._id });
+        if (!hasProfile) {
+          await InfluencerProfile.create({
+            user: existing._id,
+            niche: ["Unspecified"],
+            location: "",
+            country: "",
+            bio: "",
+            platforms: {},
+          });
+        }
+
+        invite.status = "registered";
+        await invite.save();
+
+        const auth = issueAuthResponse(existing);
+        res.status(200).json({
+          success: true,
+          message: "Account activated. You can now view your campaign invitation.",
+          data: auth,
+        });
+        return;
+      }
+    }
+
+    const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
       return next(new AppError("Email already registered", 409));
     }
 
-    const user = await User.create({ name, email, password, role });
+    const user = await User.create({
+      name,
+      email: normalizedEmail,
+      password,
+      role,
+      hasSignedUp: true,
+    });
 
-    // Auto-create influencer profile stub
     if (role === "influencer") {
       await InfluencerProfile.create({
         user: user._id,
-        niche: ["Unspecified"], // Passes "At least one niche is required" validation
+        niche: ["Unspecified"],
         location: "",
         country: "",
         bio: "",
@@ -57,23 +131,14 @@ export const register = async (
       });
     }
 
-    const token = signToken(user._id.toString(), user.role, user.email);
-    const refreshToken = signRefreshToken(user._id.toString());
+    if (inviteToken) {
+      await EmailInvite.updateOne({ inviteToken }, { status: "registered" });
+    }
 
     res.status(201).json({
       success: true,
       message: "Account created successfully",
-      data: {
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          isVerified: user.isVerified,
-        },
-        token,
-        refreshToken,
-      },
+      data: issueAuthResponse(user),
     });
   } catch (err) {
     next(err);
@@ -102,6 +167,11 @@ export const login = async (
 
     if (!user.isActive) {
       return next(new AppError("Account has been deactivated", 403));
+    }
+
+    if (!user.hasSignedUp) {
+      user.hasSignedUp = true;
+      await user.save();
     }
 
     const token = signToken(user._id.toString(), user.role, user.email);
@@ -196,6 +266,95 @@ export const updateProfile = async (
       success: true,
       message: "Profile updated successfully",
       data: { user },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const RESET_MESSAGE =
+  "If an account exists for that email, a password reset link has been sent.";
+
+// POST /api/auth/forgot-password
+export const forgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { email, role } = req.body;
+    if (!email || !role) {
+      return next(new AppError("Email and role are required", 400));
+    }
+    if (!["business", "influencer", "admin"].includes(role)) {
+      return next(new AppError("Invalid role", 400));
+    }
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail, role });
+
+    if (user) {
+      const resetToken = crypto.randomBytes(32).toString("hex");
+      user.passwordResetToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+      user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
+      await user.save();
+
+      if (isEmailConfigured()) {
+        const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+        const link = `${clientUrl}/reset-password?token=${resetToken}`;
+        await sendEmail(
+          user.email,
+          "Reset your Mashhoor password",
+          `Reset your password: ${link}\n\nThis link expires in 1 hour.`,
+          `<p>Click <a href="${link}">here</a> to reset your password. This link expires in 1 hour.</p>`
+        );
+      } else {
+        console.warn("⚠️  Password reset email skipped — SMTP not configured.");
+      }
+    }
+
+    res.status(200).json({ success: true, message: RESET_MESSAGE });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/auth/reset-password
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return next(new AppError("Token and new password are required", 400));
+    }
+    if (String(password).length < 8) {
+      return next(new AppError("Password must be at least 8 characters", 400));
+    }
+
+    const hashed = crypto.createHash("sha256").update(String(token)).digest("hex");
+    const user = await User.findOne({
+      passwordResetToken: hashed,
+      passwordResetExpires: { $gt: new Date() },
+    }).select("+password");
+
+    if (!user) {
+      return next(new AppError("Invalid or expired reset link", 400));
+    }
+
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated. You can log in with your new password.",
     });
   } catch (err) {
     next(err);

@@ -1,26 +1,43 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { dashboardApi } from "../../api";
+import { getInfluencerDashboardStats, type InfluencerDashboardStats } from "../../api/dashboardApi";
 import { Link } from "react-router-dom";
 
 function InfluencerDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<InfluencerDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await dashboardApi.getInfluencerDashboardStats();
-        setStats(res.data);
+        setLoadError("");
+        const data = await getInfluencerDashboardStats();
+        setStats(data);
       } catch (err) {
         console.error("Failed to load dashboard stats", err);
+        setLoadError(err instanceof Error ? err.message : "Failed to load analytics");
       } finally {
         setLoading(false);
       }
     };
     fetchStats();
   }, []);
+
+  const analytics = stats?.profileAnalytics;
+  const breakdown = analytics?.trustScoreBreakdown ?? {
+    engagementAuthenticity: 0,
+    followerQuality: 0,
+    contentConsistency: 0,
+    collaborationHistory: 0,
+  };
+  const maxEarnings = Math.max(...(stats?.earningsByMonth?.map((e) => e.amount) || [0]), 1);
+  const trustScore = stats?.trustScore ?? 0;
+  const followersLabel =
+    (analytics?.totalFollowers || 0) >= 1000
+      ? `${((analytics?.totalFollowers || 0) / 1000).toFixed(1)}K`
+      : String(analytics?.totalFollowers || 0);
 
   return (
     <>
@@ -34,7 +51,67 @@ function InfluencerDashboard() {
               <p className="text-gray-400 mt-2 text-lg">
                 Here's your performance overview
               </p>
+              {loadError && (
+                <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 max-w-xl">
+                  {loadError}
+                </div>
+              )}
             </div>
+          </div>
+
+          <div className="card-white mb-8">
+            <div className="text-lg font-semibold mb-1">Your Profile Analytics</div>
+            <p className="text-sm text-gray-500 mb-4">
+              Live social metrics and trust breakdown for your account
+            </p>
+            {loading ? (
+              <p className="text-gray-400 text-sm">Loading profile analytics...</p>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="rounded-xl border border-gray-100 p-4 bg-gray-50">
+                  <div className="text-sm text-gray-500">Total Followers</div>
+                  <div className="text-2xl font-bold text-gray-900 mt-1">{followersLabel}</div>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-4 bg-gray-50">
+                  <div className="text-sm text-gray-500">Avg. Engagement</div>
+                  <div className="text-2xl font-bold text-gray-900 mt-1">
+                    {(analytics?.avgEngagementRate || 0).toFixed(1)}%
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-4 bg-gray-50">
+                  <div className="text-sm text-gray-500">YouTube Subscribers</div>
+                  <div className="text-2xl font-bold text-gray-900 mt-1">
+                    {(analytics?.platforms?.youtube?.subscribers || 0).toLocaleString()}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-4 bg-gray-50">
+                  <div className="text-sm text-gray-500">Primary Niche</div>
+                  <div className="text-lg font-bold text-gray-900 mt-1 capitalize">
+                    {analytics?.niche?.[0] || "—"}
+                  </div>
+                </div>
+              </div>
+            )}
+            {!loading && analytics && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                {[
+                  { label: "Engagement authenticity", value: breakdown.engagementAuthenticity },
+                  { label: "Follower quality", value: breakdown.followerQuality },
+                  { label: "Content consistency", value: breakdown.contentConsistency },
+                  { label: "Collaboration history", value: breakdown.collaborationHistory },
+                ].map((item) => (
+                  <div key={item.label} className="text-center rounded-lg border border-purple-100 py-3 px-2">
+                    <div className="text-xl font-bold text-purple-700">{item.value}%</div>
+                    <div className="text-xs text-gray-500 mt-1">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!loading && analytics && analytics.totalFollowers === 0 && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mt-4">
+                Add your YouTube or Instagram handle in Settings to pull your follower and engagement analytics.
+              </p>
+            )}
           </div>
 
           <div className="flex gap-6 mb-8">
@@ -53,7 +130,7 @@ function InfluencerDashboard() {
               <div className="flex justify-between text-gray-500">
                 <span>Active Campaigns</span>
                 <span>
-                  <img src="/src/assets/briefcase-business.svg" alt="" />
+                  <img src="/assets/briefcase-business.svg" alt="" />
                 </span>
               </div>
               <div className="stat-value">{loading ? "-" : stats?.activeCampaigns || 0}</div>
@@ -64,7 +141,7 @@ function InfluencerDashboard() {
               <div className="flex justify-between text-gray-500">
                 <span>Pending Requests</span>
                 <span>
-                  <img src="/src/assets/loader-circle.svg" alt="" />
+                  <img src="/assets/loader-circle.svg" alt="" />
                 </span>
               </div>
               <div className="stat-value">{loading ? "-" : stats?.pendingRequests || 0}</div>
@@ -77,12 +154,12 @@ function InfluencerDashboard() {
               <div className="flex justify-between text-gray-500">
                 <span>Trust Score</span>
                 <span>
-                  <img src="/src/assets/chart-line.svg" alt="" />
+                  <img src="/assets/chart-line.svg" alt="" />
                 </span>
               </div>
-              <div className="stat-value">{loading ? "-" : `${stats?.trustScore || 0}/100`}</div>
+              <div className="stat-value">{loading ? "-" : `${trustScore}/100`}</div>
               <div className="stat-sub text-green">
-                {stats?.trustScore > 80 ? "Excellent rating" : stats?.trustScore > 0 ? "Good rating" : "New account"}
+                {trustScore > 80 ? "Excellent rating" : trustScore > 0 ? "Good rating" : "New account"}
               </div>
             </div>
           </div>
@@ -104,21 +181,29 @@ function InfluencerDashboard() {
 
                 <div className="ml-10">
                   <div className="chart-container">
-                    {/* Placeholder chart. Shows empty for new users. */}
-                    <div className="bar" style={{ height: stats?.totalEarnings ? "40%" : "0%" }}></div>
-                    <div className="bar" style={{ height: stats?.totalEarnings ? "55%" : "0%" }}></div>
-                    <div className="bar" style={{ height: stats?.totalEarnings ? "45%" : "0%" }}></div>
-                    <div className="bar" style={{ height: stats?.totalEarnings ? "65%" : "0%" }}></div>
-                    <div className="bar" style={{ height: stats?.totalEarnings ? "75%" : "0%" }}></div>
-                    <div className="bar" style={{ height: stats?.totalEarnings ? "95%" : "0%" }}></div>
+                    {loading ? (
+                      <div className="w-full h-full flex items-center justify-center text-sm text-gray-400">Loading...</div>
+                    ) : (
+                      stats?.earningsByMonth?.map((item, i) => (
+                        <div
+                          key={i}
+                          className="bar"
+                          style={{
+                            height: item.amount > 0 ? `${Math.max((item.amount / maxEarnings) * 100, 8)}%` : "4px",
+                          }}
+                          title={`Rs ${item.amount.toLocaleString()}`}
+                        />
+                      ))
+                    )}
                   </div>
                   <div className="flex justify-between mt-2 text-gray-400 text-sm px-2">
-                    <span>Jan</span>
-                    <span>Feb</span>
-                    <span>Mar</span>
-                    <span>Apr</span>
-                    <span>May</span>
-                    <span>Jun</span>
+                    {stats?.earningsByMonth?.map((item, i) => (
+                      <span key={i}>{item.month}</span>
+                    )) ?? (
+                      <>
+                        <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -132,7 +217,7 @@ function InfluencerDashboard() {
               <Link to="/influencer-settings" className="action-btn block">
                 <div className="flex items-center gap-3">
                   <div className="bg-gray-100 p-2 rounded-md flex-shrink-0">
-                    <img src="/src/assets/square-pen.svg" alt="" />
+                    <img src="/assets/square-pen.svg" alt="" />
                   </div>
                   <div className="font-medium">Update Profile</div>
                 </div>
@@ -141,7 +226,7 @@ function InfluencerDashboard() {
               <Link to="/influencer-requests" className="action-btn block">
                 <div className="flex items-center gap-3">
                   <div className="bg-gray-100 p-2 rounded-md flex-shrink-0">
-                    <img src="/src/assets/users.svg" alt="" />
+                    <img src="/assets/users.svg" alt="" />
                   </div>
                   <div className="font-medium">View Campaign Requests</div>
                 </div>
@@ -150,7 +235,7 @@ function InfluencerDashboard() {
               <Link to="/influencer-settings" className="action-btn block">
                 <div className="flex items-center gap-3">
                   <div className="bg-gray-100 p-2 rounded-md flex-shrink-0">
-                    <img src="/src/assets/lock.svg" alt="" />
+                    <img src="/assets/lock.svg" alt="" />
                   </div>
                   <div className="font-medium">Privacy & Consent Settings</div>
                 </div>

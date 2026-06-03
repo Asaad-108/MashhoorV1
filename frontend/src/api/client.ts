@@ -1,8 +1,14 @@
 import axios from "axios";
 
+// Use "/api" in dev so Vite proxies to the backend (see vite.config.ts). Override with VITE_API_URL in production.
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
+const isAuthEndpoint = (url?: string) =>
+  !!url && (url.includes("/auth/login") || url.includes("/auth/register"));
+
 // ─── Base instance ────────────────────────────────────────────────────────────
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
@@ -39,8 +45,14 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If 401 and not already retrying
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Do not run refresh flow for login/register failures or unauthenticated requests
+    const hadAccessToken = !!localStorage.getItem("mashhoor_token");
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      hadAccessToken &&
+      !isAuthEndpoint(originalRequest?.url)
+    ) {
       if (isRefreshing) {
         // Queue requests while refresh is in progress
         return new Promise((resolve, reject) => {
@@ -65,10 +77,7 @@ api.interceptors.response.use(
       }
 
       try {
-        const { data } = await axios.post(
-          `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/auth/refresh`,
-          { refreshToken }
-        );
+        const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
         const newToken = data.data.token;
         localStorage.setItem("mashhoor_token", newToken);
         api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
@@ -85,7 +94,11 @@ api.interceptors.response.use(
       }
     }
 
-    return Promise.reject(error);
+    const message =
+      (error.response?.data as { message?: string } | undefined)?.message ||
+      error.message ||
+      "Request failed";
+    return Promise.reject(new Error(message));
   }
 );
 

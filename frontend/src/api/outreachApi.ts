@@ -18,14 +18,42 @@ export type Outreach = {
   createdAt: string;
 };
 
+export type EmailInviteResult = {
+  _id: string;
+  email: string;
+  influencerName: string;
+  inviteToken: string;
+  status: string;
+};
+
+export type SendOutreachResult = {
+  outreach: Outreach;
+  emailInvite?: EmailInviteResult | null;
+};
+
+/** Seeded/demo placeholder inboxes — need a real email in the modal. */
+export const isPlaceholderInfluencerEmail = (email?: string) =>
+  !email || /@(youtube|instagram)\.test$/i.test(email);
+
+/** True only after the influencer signed up on Mashhoor (not imported/seeded). */
+export const isRegisteredOnPlatform = (user?: { hasSignedUp?: boolean }) =>
+  user?.hasSignedUp === true;
+
 export const outreachApi = {
   send: async (
     campaignId: string,
     influencerId: string,
     message: string,
-    isAiGenerated = false
-  ): Promise<Outreach> => {
-    const { data } = await api.post("/outreach", { campaignId, influencerId, message, isAiGenerated });
+    isAiGenerated = false,
+    contactEmail?: string
+  ): Promise<SendOutreachResult & { channel?: "platform" | "email" }> => {
+    const { data } = await api.post("/outreach", {
+      campaignId,
+      influencerId,
+      message,
+      isAiGenerated,
+      contactEmail,
+    });
     return data.data;
   },
 
@@ -49,11 +77,21 @@ export const outreachApi = {
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
+export type MessageType =
+  | "direct"
+  | "outreach"
+  | "assistant_query"
+  | "assistant_reply";
+
 export type Message = {
   _id: string;
-  sender: { _id: string; name: string; avatar?: string };
-  receiver: string;
+  sender?: { _id: string; name: string; avatar?: string; role?: string };
+  receiver?: string;
   content: string;
+  messageType?: MessageType;
+  isAssistant?: boolean;
+  displayName?: string;
+  assistantTrace?: string;
   isRead: boolean;
   createdAt: string;
 };
@@ -91,6 +129,16 @@ export const messageApi = {
       receiverId,
       content,
       campaignId,
+    });
+    return data.data;
+  },
+
+  askAssistant: async (
+    conversationId: string,
+    content: string
+  ): Promise<{ userMessage: Message; assistantMessage: Message }> => {
+    const { data } = await api.post(`/messages/${conversationId}/ask-assistant`, {
+      content,
     });
     return data.data;
   },

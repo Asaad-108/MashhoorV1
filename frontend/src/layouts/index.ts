@@ -12,14 +12,16 @@ export { About, NavBar, LandingPage, Features, Working, PublicLayout };
 import Login from "./AuthLayout/Login";
 import SignUp from "./AuthLayout/Signup";
 import Reset from "./AuthLayout/Reset";
+import ResetPassword from "./AuthLayout/ResetPassword";
 import AuthLayout from "./AuthLayout/AuthLayout";
 
-export { Login, SignUp, Reset, AuthLayout };
+export { Login, SignUp, Reset, ResetPassword, AuthLayout };
 
 // Influencer Layout Components
 import InfluencerLayout from "./InfluencerLayout/InfluencerLayout";
 import InfluencerDashboard from "./InfluencerLayout/InfluencerDashboard";
 import Requests from "./InfluencerLayout/Requests";
+import InfluencerMessages from "./InfluencerLayout/InfluencerMessages";
 import Settings from "./InfluencerLayout/Settings";
 import CampaignDetails from "./InfluencerLayout/CampaignDetail";
 
@@ -27,6 +29,7 @@ export {
   InfluencerLayout,
   InfluencerDashboard,
   Requests,
+  InfluencerMessages,
   Settings,
   CampaignDetails,
 };

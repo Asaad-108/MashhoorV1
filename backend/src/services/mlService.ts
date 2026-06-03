@@ -426,7 +426,19 @@ export const roiBenchmarkDataset: ROITrainingSample[] = [
   { features: { reach: 650000, engagementRate: 2.0, trustScore: 85, investment: 900000, productValue: 4200 }, actualConversions: 2050 },
   { features: { reach: 1100000, engagementRate: 2.6, trustScore: 97, investment: 1800000, productValue: 5500 }, actualConversions: 3950 },
   { features: { reach: 550000, engagementRate: 2.3, trustScore: 89, investment: 750000, productValue: 3900 }, actualConversions: 1840 },
-  { features: { reach: 1500000, engagementRate: 3.0, trustScore: 100, investment: 2500000, productValue: 7000 }, actualConversions: 5800 }
+  { features: { reach: 1500000, engagementRate: 3.0, trustScore: 100, investment: 2500000, productValue: 7000 }, actualConversions: 5800 },
+
+  // Instagram-oriented benchmarks (reach = avg likes + comments per post)
+  { features: { reach: 800, engagementRate: 8.5, trustScore: 88, investment: 12000, productValue: 1500 }, actualConversions: 28 },
+  { features: { reach: 1500, engagementRate: 6.2, trustScore: 82, investment: 20000, productValue: 2000 }, actualConversions: 42 },
+  { features: { reach: 3200, engagementRate: 5.1, trustScore: 85, investment: 35000, productValue: 2500 }, actualConversions: 72 },
+  { features: { reach: 5500, engagementRate: 4.4, trustScore: 79, investment: 45000, productValue: 2200 }, actualConversions: 95 },
+  { features: { reach: 12000, engagementRate: 3.8, trustScore: 91, investment: 80000, productValue: 3000 }, actualConversions: 165 },
+  { features: { reach: 22000, engagementRate: 3.2, trustScore: 87, investment: 120000, productValue: 3500 }, actualConversions: 240 },
+  { features: { reach: 45000, engagementRate: 2.6, trustScore: 93, investment: 200000, productValue: 4000 }, actualConversions: 420 },
+  { features: { reach: 85000, engagementRate: 2.1, trustScore: 90, investment: 350000, productValue: 4500 }, actualConversions: 680 },
+  { features: { reach: 400, engagementRate: 9.5, trustScore: 75, investment: 8000, productValue: 1200 }, actualConversions: 14 },
+  { features: { reach: 180000, engagementRate: 1.8, trustScore: 96, investment: 500000, productValue: 5000 }, actualConversions: 920 }
 ];
 
 // Initialize and fit the singleton ML regression model
@@ -473,9 +485,9 @@ export const predictCampaignROIWithML = (
 // ==========================================
 
 export interface TrustFeatures {
-  followerHealth: number;         // 0-100 (derived from followerCount & avgReach)
-  engagementAuthenticity: number; // 0-100 (derived from YouTube API engagement rate)
-  contentConsistency: number;     // 0-100 (derived from YouTube API upload dates & videoCount)
+  followerHealth: number;         // 0-100 (platform-aware interaction / view ratio)
+  engagementAuthenticity: number; // 0-100 (platform-specific engagement benchmarks)
+  contentConsistency: number;     // 0-100 (posting recency & content volume)
   collaborationHistory: number;   // 0-100 (derived from platform campaigns & brand reviews)
 }
 

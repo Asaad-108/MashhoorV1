@@ -69,8 +69,22 @@ export const campaignApi = {
     await api.delete(`/campaigns/${id}`);
   },
 
-  addInfluencer: async (campaignId: string, influencerId: string): Promise<Campaign> => {
-    const { data } = await api.post(`/campaigns/${campaignId}/influencers`, { influencerId });
+  addInfluencer: async (
+    campaignId: string,
+    influencerId: string,
+    message: string,
+    contactEmail?: string
+  ): Promise<{
+    campaign: Campaign;
+    outreach: unknown;
+    channel: "platform" | "email";
+    emailInvite?: unknown;
+  }> => {
+    const { data } = await api.post(`/campaigns/${campaignId}/influencers`, {
+      influencerId,
+      message,
+      contactEmail,
+    });
     return data.data;
   },
 

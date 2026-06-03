@@ -11,6 +11,8 @@ export interface IUser extends Document {
   phone?: string;
   avatar?: string;
   isVerified: boolean;
+  /** True only after signing up through /auth/register (not seeded/imported profiles). */
+  hasSignedUp: boolean;
   isActive: boolean;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
@@ -43,7 +45,7 @@ const UserSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ["business", "influencer"],
+      enum: ["business", "influencer", "admin"],
       required: true,
     },
     phone: {
@@ -55,6 +57,10 @@ const UserSchema = new Schema<IUser>(
       default: null,
     },
     isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    hasSignedUp: {
       type: Boolean,
       default: false,
     },

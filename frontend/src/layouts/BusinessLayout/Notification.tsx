@@ -10,9 +10,8 @@ function Notification() {
     const fetchNotifications = async () => {
       try {
         const res = await dashboardApi.getBusinessDashboardStats();
-        // Map recent activity to the notification format
-        if (res.data && res.data.recentActivity) {
-          const mapped = res.data.recentActivity.map((activity: any, index: number) => ({
+        if (res.recentActivity?.length) {
+          const mapped = res.recentActivity.map((activity, index: number) => ({
             id: activity.id || index,
             type: activity.type === "campaign" ? "Campaigns" : "Messages",
             title: activity.type === "campaign" ? "Campaign Update" : "Outreach Request",
@@ -24,8 +23,8 @@ function Notification() {
               <img
                 src={
                   activity.type === "campaign"
-                    ? "/src/assets/briefcase-business-.svg"
-                    : "/src/assets/message-square-green.svg"
+                    ? "/assets/briefcase-business-.svg"
+                    : "/assets/message-square-green.svg"
                 }
                 alt={activity.type}
                 width={20}
@@ -83,7 +82,7 @@ function Notification() {
           ) : filteredNotifications.length === 0 ? (
              <div className="text-center py-20 text-gray-400 bg-white border border-gray-200 rounded-xl">
                <img
-                 src="/src/assets/loader-circle.svg"
+                 src="/assets/loader-circle.svg"
                  alt="No notifications"
                  className="w-12 h-12 mx-auto mb-4 opacity-50"
                />

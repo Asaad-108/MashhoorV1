@@ -19,7 +19,9 @@ import {
   Notification,
   PublicLayout,
   Requests,
+  InfluencerMessages,
   Reset,
+  ResetPassword,
   Settings,
   SignUp,
   Working,
@@ -58,6 +60,7 @@ export function AppRoutes() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/reset" element={<Reset />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Route>
 
         {/* Business Routes — protected */}
@@ -79,6 +82,7 @@ export function AppRoutes() {
           <Route path="/influencer-dashboard" element={<ProtectedRoute allowedRole="influencer"><InfluencerDashboard /></ProtectedRoute>} />
           <Route path="/campaign-details/:id" element={<ProtectedRoute allowedRole="influencer"><CampaignDetails /></ProtectedRoute>} />
           <Route path="/influencer-requests" element={<ProtectedRoute allowedRole="influencer"><Requests /></ProtectedRoute>} />
+          <Route path="/influencer-messages" element={<ProtectedRoute allowedRole="influencer"><InfluencerMessages /></ProtectedRoute>} />
           <Route path="/influencer-settings" element={<ProtectedRoute allowedRole="influencer"><Settings /></ProtectedRoute>} />
         </Route>
 

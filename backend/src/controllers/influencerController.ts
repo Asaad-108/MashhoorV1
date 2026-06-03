@@ -6,6 +6,11 @@ import { AppError } from "../middleware/errorHandler";
 import { AuthRequest } from "../types";
 import { calculateTrustScore } from "../services/trustScoreService";
 import { categorizeInfluencersByNiche, predictCampaignROIWithML } from "../services/mlService";
+import { getYouTubeApiKey } from "../config/youtube";
+import {
+  getCampaignReachForROI,
+  getUnifiedPlatformMetrics,
+} from "../services/platformMetricsService";
 
 // GET /api/influencers
 // Query params: niche, country, minFollowers, maxFollowers, minTrustScore, minEngagement, page, limit, sort
@@ -65,7 +70,7 @@ export const getInfluencers = async (
     let query = InfluencerProfile.find(filter)
       .populate({
         path: "user",
-        select: "name email avatar",
+        select: "name email avatar hasSignedUp",
       })
       .sort(sortObj)
       .skip(skip)
@@ -86,7 +91,7 @@ export const getInfluencers = async (
             profiles = await InfluencerProfile.find(filter)
               .populate({
                 path: "user",
-                select: "name email avatar",
+                select: "name email avatar hasSignedUp",
               })
               .sort(sortObj)
               .skip(skip)
@@ -110,8 +115,8 @@ export const getInfluencers = async (
           const user = profile.user as any;
           if (user && user.email && user.email.endsWith("@youtube.test")) {
             const channelId = user.email.split("@")[0];
-            const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
-            
+            const API_KEY = getYouTubeApiKey();
+            if (API_KEY) {
             try {
               let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${API_KEY}`;
               let statsRes = await fetch(statsURL);
@@ -185,6 +190,7 @@ export const getInfluencers = async (
                 profile.avgEngagementRate = engagementRate;
               }
             } catch (err) {}
+            }
           }
 
           const { score, breakdown } = await calculateTrustScore(profile);
@@ -223,7 +229,7 @@ export const getInfluencerById = async (
   try {
     const profile = await InfluencerProfile.findOne({
       user: req.params.id,
-    }).populate("user", "name email avatar createdAt");
+    }).populate("user", "name email avatar hasSignedUp createdAt");
 
     if (!profile) return next(new AppError("Influencer not found", 404));
 
@@ -231,8 +237,8 @@ export const getInfluencerById = async (
     const user = profile.user as any;
     if (user && user.email && user.email.endsWith("@youtube.test")) {
       const channelId = user.email.split("@")[0];
-      const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
-      
+      const API_KEY = getYouTubeApiKey();
+      if (API_KEY) {
       try {
         let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${API_KEY}`;
         let statsRes = await fetch(statsURL);
@@ -313,6 +319,7 @@ export const getInfluencerById = async (
       } catch (err) {
         console.error("Error fetching live YouTube data:", err);
       }
+      }
     }
 
     const { score, breakdown, aiModelMetrics } = await calculateTrustScore(profile);
@@ -367,8 +374,8 @@ export const updateMyProfile = async (
       }
       handle = handle.replace('@', '');
       
-      const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
-      
+      const API_KEY = getYouTubeApiKey();
+      if (API_KEY) {
       try {
         const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${handle}&key=${API_KEY}`;
         const searchRes = await fetch(searchURL);
@@ -403,7 +410,28 @@ export const updateMyProfile = async (
       } catch(err) {
         console.error("Error fetching YouTube profile on update", err);
       }
+      }
     }
+
+    if (profile.platforms?.instagram) {
+      const ig = profile.platforms.instagram;
+      const followers = ig.followers ?? 0;
+      const likes = ig.avgLikes ?? 0;
+      const comments = ig.avgComments ?? 0;
+      if (followers > 0 && (likes > 0 || comments > 0)) {
+        const derived = Math.min(
+          100,
+          Number((((likes + comments) / followers) * 100).toFixed(2))
+        );
+        if (!ig.engagementRate || ig.engagementRate === 0) {
+          ig.engagementRate = derived;
+        }
+      }
+    }
+
+    const { score, breakdown } = await calculateTrustScore(profile);
+    profile.trustScore = score;
+    profile.trustScoreBreakdown = breakdown;
 
     await profile.save();
 
@@ -546,8 +574,8 @@ export const calculateInfluencerTrustScore = async (
     const user = profile.user as any;
     if (user && user.email && user.email.endsWith("@youtube.test")) {
       const channelId = user.email.split("@")[0];
-      const API_KEY = process.env.YOUTUBE_API_KEY || "AIzaSyDJdoO_EFuDpga_8vRo1eDWkETHmagDgsw";
-      
+      const API_KEY = getYouTubeApiKey();
+      if (API_KEY) {
       try {
         let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${API_KEY}`;
         let statsRes = await fetch(statsURL);
@@ -628,6 +656,7 @@ export const calculateInfluencerTrustScore = async (
       } catch (err) {
         console.error("Error fetching live YouTube data:", err);
       }
+      }
     }
 
     const { score, breakdown, aiModelMetrics } = await calculateTrustScore(profile);
@@ -694,14 +723,9 @@ export const predictInfluencerROI = async (
     const profile = await InfluencerProfile.findOne({ user: req.params.id }).populate("user", "name");
     if (!profile) return next(new AppError("Influencer not found", 404));
 
-    // 1. Base Reach
-    let baseReach = profile.totalFollowers * 0.1; // Default 10%
-    if (profile.platforms && profile.platforms.youtube && profile.platforms.youtube.avgViews) {
-       baseReach = profile.platforms.youtube.avgViews;
-    }
-
-    // 2. Engagement Rate
-    const engagementRate = profile.avgEngagementRate || 5.0;
+    const platformMetrics = getUnifiedPlatformMetrics(profile);
+    const baseReach = getCampaignReachForROI(profile);
+    const engagementRate = platformMetrics.engagementRate || profile.avgEngagementRate || 5.0;
 
     // 3. Trust Score
     const trustScore = profile.trustScore || 50;
@@ -723,7 +747,8 @@ export const predictInfluencerROI = async (
         predictedROI: mlResult.predictedROI,
         roiPercentage: mlResult.roiPercentage,
         aiModelMetrics: mlResult.aiModelMetrics,
-        summary: `Based on ${influencerName}'s reach of ~${Math.round(baseReach)}, ${engagementRate.toFixed(1)}% engagement rate, and ${trustScore}/100 Trust Score, we predict ~${mlResult.predictedConversions} sales. At PKR ${productValue} per product, expected revenue is PKR ${mlResult.estimatedRevenue.toLocaleString()}. Subtracting your PKR ${investment} budget yields a net ROI of PKR ${mlResult.predictedROI.toLocaleString()} (${mlResult.roiPercentage}%).`
+        primaryPlatform: platformMetrics.primaryPlatform,
+        summary: `Based on ${influencerName}'s ${platformMetrics.primaryPlatform} reach of ~${Math.round(baseReach)} per post, ${engagementRate.toFixed(1)}% engagement rate, and ${trustScore}/100 Trust Score, we predict ~${mlResult.predictedConversions} sales. At PKR ${productValue} per product, expected revenue is PKR ${mlResult.estimatedRevenue.toLocaleString()}. Subtracting your PKR ${investment} budget yields a net ROI of PKR ${mlResult.predictedROI.toLocaleString()} (${mlResult.roiPercentage}%).`
       }
     });
   } catch (err) {

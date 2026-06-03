@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Title } from "../../components";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 type Role = "business" | "influencer";
@@ -8,8 +8,13 @@ type Role = "business" | "influencer";
 function SignUp() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const inviteCampaignId = searchParams.get("campaign");
+  const inviteToken = searchParams.get("invite");
 
-  const [accountType, setAccountType] = useState<Role>("influencer");
+  const [accountType, setAccountType] = useState<Role>(
+    (searchParams.get("role") as Role) || "influencer"
+  );
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -47,11 +52,24 @@ function SignUp() {
     }
     setLoading(true);
     try {
-      // TODO: Replace with real API call: await axios.post("/api/auth/signup", {...})
-      await register(form.name, form.email, form.password, accountType);
-      navigate(accountType === "business" ? "/business-dashboard" : "/influencer-dashboard");
-    } catch {
-      setErrors({ general: "Signup failed. Please try again." });
+      await register(
+        form.name,
+        form.email,
+        form.password,
+        accountType,
+        inviteToken || undefined
+      );
+      navigate(
+        inviteCampaignId && accountType === "influencer"
+          ? "/influencer-requests"
+          : accountType === "business"
+            ? "/business-dashboard"
+            : "/influencer-dashboard"
+      );
+    } catch (err: unknown) {
+      setErrors({
+        general: err instanceof Error ? err.message : "Signup failed. Please try again.",
+      });
     } finally {
       setLoading(false);
     }
@@ -70,6 +88,12 @@ function SignUp() {
         <div className="mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-1">Create an Account</h2>
           <p className="text-gray-400 text-sm">Choose your account type and fill in your details</p>
+          {inviteToken && (
+            <div className="mt-3 text-sm text-purple-800 bg-purple-50 border border-purple-200 rounded-lg px-4 py-3">
+              You were invited to collaborate on Mashhoor
+              {inviteCampaignId ? " for a campaign" : ""}. Sign up as an influencer to accept.
+            </div>
+          )}
         </div>
 
         {/* Account type toggle */}
@@ -78,14 +102,14 @@ function SignUp() {
             className={`toggle-item ${accountType === "business" ? "active" : ""}`}
             onClick={() => setAccountType("business")}
           >
-            <img src="/src/assets/briefcase-business.svg" alt="Business" width={16} height={16} />
+            <img src="/assets/briefcase-business.svg" alt="Business" width={16} height={16} />
             Business Account
           </div>
           <div
             className={`toggle-item ${accountType === "influencer" ? "active" : ""}`}
             onClick={() => setAccountType("influencer")}
           >
-            <img src="/src/assets/user.svg" alt="Influencer" width={16} height={16} />
+            <img src="/assets/user.svg" alt="Influencer" width={16} height={16} />
             Influencer Account
           </div>
         </div>
@@ -105,7 +129,7 @@ function SignUp() {
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 <img
-                  src={accountType === "business" ? "/src/assets/briefcase-business.svg" : "/src/assets/user.svg"}
+                  src={accountType === "business" ? "/assets/briefcase-business.svg" : "/assets/user.svg"}
                   alt="Name" width={18} height={18}
                 />
               </div>
@@ -128,7 +152,7 @@ function SignUp() {
             </label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <img src="/src/assets/mail.svg" alt="Email" width={18} height={18} />
+                <img src="/assets/mail.svg" alt="Email" width={18} height={18} />
               </div>
               <input
                 type="email"
@@ -147,7 +171,7 @@ function SignUp() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <img src="/src/assets/lock.svg" alt="Password" width={18} height={18} />
+                <img src="/assets/lock.svg" alt="Password" width={18} height={18} />
               </div>
               <input
                 type="password"
@@ -166,7 +190,7 @@ function SignUp() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <img src="/src/assets/lock.svg" alt="Confirm Password" width={18} height={18} />
+                <img src="/assets/lock.svg" alt="Confirm Password" width={18} height={18} />
               </div>
               <input
                 type="password"

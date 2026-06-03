@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Title } from "../../components";
 import { useAuth } from "../../context/AuthContext";
 
-type Role = "business" | "influencer";
+type Role = "business" | "influencer" | "admin";
 
 function Login() {
   const { login } = useAuth();
@@ -31,7 +31,9 @@ function Login() {
       navigate(
         selectedRole === "business"
           ? "/business-dashboard"
-          : "/influencer-dashboard"
+          : selectedRole === "admin"
+            ? "/admin/dashboard"
+            : "/influencer-dashboard"
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed. Please try again.");
@@ -67,7 +69,7 @@ function Login() {
             className={`flex-1 btn-login-outline rounded-lg py-3 flex justify-center items-center gap-2 font-medium transition-all ${selectedRole === "business" ? "border-purple-500 text-purple-600 bg-purple-50" : ""
               }`}
           >
-            <img src="/src/assets/briefcase-business.svg" alt="Business" width={16} height={16} />
+            <img src="/assets/briefcase-business.svg" alt="Business" width={16} height={16} />
             Business
           </button>
           <button
@@ -76,8 +78,16 @@ function Login() {
             className={`flex-1 btn-login-primary rounded-lg py-3 flex justify-center items-center gap-2 font-medium transition-all ${selectedRole === "influencer" ? "opacity-100" : "opacity-60"
               }`}
           >
-            <img src="/src/assets/userWhite.svg" alt="Influencer" width={16} height={16} />
+            <img src="/assets/userWhite.svg" alt="Influencer" width={16} height={16} />
             Influencer
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedRole("admin")}
+            className={`flex-1 btn-login-outline rounded-lg py-3 flex justify-center items-center gap-2 font-medium transition-all ${selectedRole === "admin" ? "border-purple-500 text-purple-600 bg-purple-50" : ""
+              }`}
+          >
+            Admin
           </button>
         </div>
 
@@ -86,7 +96,7 @@ function Login() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <img src="/src/assets/mail.svg" alt="Email" width={18} height={18} />
+                <img src="/assets/mail.svg" alt="Email" width={18} height={18} />
               </div>
               <input
                 type="email"
@@ -103,7 +113,7 @@ function Login() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <img src="/src/assets/lock.svg" alt="Password" width={18} height={18} />
+                <img src="/assets/lock.svg" alt="Password" width={18} height={18} />
               </div>
               <input
                 type="password"
@@ -132,7 +142,9 @@ function Login() {
             disabled={loading}
             className="w-full btn-login-primary rounded-lg py-3 font-medium mb-4 disabled:opacity-60"
           >
-            {loading ? "Logging in..." : `Login as ${selectedRole === "business" ? "Business" : "Influencer"}`}
+            {loading
+              ? "Logging in..."
+              : `Login as ${selectedRole === "business" ? "Business" : selectedRole === "admin" ? "Admin" : "Influencer"}`}
           </button>
         </form>
 

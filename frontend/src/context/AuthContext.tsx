@@ -4,7 +4,7 @@ import { authApi, type AuthUser, type UserRole } from "../api";
 interface AuthContextType {
   user: AuthUser | null;
   login: (email: string, password: string, role: UserRole) => Promise<void>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
+  register: (name: string, email: string, password: string, role: UserRole, inviteToken?: string) => Promise<void>;
   logout: () => void;
   updateUser: (user: AuthUser) => void;
   isAuthenticated: boolean;
@@ -30,8 +30,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveSession(user, token, refreshToken);
   };
 
-  const register = async (name: string, email: string, password: string, role: UserRole) => {
-    const { user, token, refreshToken } = await authApi.register(name, email, password, role);
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    role: UserRole,
+    inviteToken?: string
+  ) => {
+    const { user, token, refreshToken } = await authApi.register(
+      name,
+      email,
+      password,
+      role,
+      inviteToken
+    );
     saveSession(user, token, refreshToken);
   };
 

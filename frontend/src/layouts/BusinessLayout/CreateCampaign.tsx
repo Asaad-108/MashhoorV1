@@ -65,10 +65,10 @@ function CreateCampaign() {
       });
 
       // Redirect to dashboard on success
-      navigate("/business-dashboard");
-    } catch (err: any) {
+      navigate("/business-dashboard", { replace: true });
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.response?.data?.message || "Failed to create campaign. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to create campaign. Please try again.");
       setIsSubmitting(false);
     }
   };

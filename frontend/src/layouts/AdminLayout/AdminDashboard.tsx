@@ -1,18 +1,51 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { adminApi, type AdminStats } from "../../api/adminApi";
 
 function AdminDashboard() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [error, setError] = useState("");
 
-  // Mock data based on screenshots
-  const stats = [
-    { label: "Total Influencers", value: "3,245", sub: "12 pending verification", icon: "influencers" },
-    { label: "Total Campaigns", value: "1,842", sub: "+127 this month", icon: "campaigns", trend: "up" },
-    { label: "Flagged Profiles", value: "8", sub: "Requires attention", icon: "flag", alert: true },
-    { label: "Platform Revenue", value: "$284K", sub: "+18% from last month", icon: "revenue", trend: "up" },
-  ];
+  useEffect(() => {
+    adminApi
+      .getStats()
+      .then(setStats)
+      .catch((err: Error) => setError(err.message || "Failed to load admin stats"))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const recentActivity = [
+  const statCards = stats
+    ? [
+        {
+          label: "Total Influencers",
+          value: stats.totalInfluencers.toLocaleString(),
+          sub: `${stats.pendingVerification} pending verification`,
+          icon: "influencers",
+        },
+        {
+          label: "Total Campaigns",
+          value: stats.totalCampaigns.toLocaleString(),
+          sub: `${stats.activeCampaigns} active`,
+          icon: "campaigns",
+          trend: "up" as const,
+        },
+        {
+          label: "Business Accounts",
+          value: stats.totalBusinesses.toLocaleString(),
+          sub: "Registered brands",
+          icon: "flag",
+        },
+        {
+          label: "Outreach Requests",
+          value: stats.totalOutreach.toLocaleString(),
+          sub: `${stats.pendingOutreach} pending`,
+          icon: "revenue",
+        },
+      ]
+    : [];
+
+  const recentActivity = stats?.recentActivity ?? [
     { id: 1, type: "user", text: "New influencer registered: Sarah Johnson", time: "10 minutes ago" },
     { id: 2, type: "campaign", text: "Campaign created: Summer Launch by TechStyle Co.", time: "1 hour ago" },
     { id: 3, type: "verification", text: "Verification approved for @mayapatel", time: "2 hours ago" },
@@ -20,16 +53,25 @@ function AdminDashboard() {
     { id: 5, type: "system", text: "Dataset updated: 150 new influencers added", time: "5 hours ago" },
   ];
 
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500">Loading admin dashboard...</div>;
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto">
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
         <p className="text-gray-500 text-lg">Platform overview and management</p>
+        {error && (
+          <p className="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 inline-block">
+            {error}
+          </p>
+        )}
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-4 gap-6 mb-8">
-        {stats.map((stat, i) => (
+        {statCards.map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
             <div className="flex justify-between items-start mb-4">
               <span className="text-sm font-bold text-gray-400 uppercase tracking-wider">{stat.label}</span>
@@ -42,7 +84,7 @@ function AdminDashboard() {
             </div>
             <div className="text-3xl font-bold text-gray-900 mb-2">{stat.value}</div>
             <div className={`text-xs font-bold ${
-              stat.alert ? 'text-red-500' : stat.trend === 'up' ? 'text-green-500' : 'text-purple-500'
+              stat.trend === 'up' ? 'text-green-500' : 'text-purple-500'
             }`}>
               {stat.sub}
             </div>
@@ -92,7 +134,9 @@ function AdminDashboard() {
                 <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-gray-400 shadow-sm group-hover:text-purple-600">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 </div>
-                <span className="font-semibold text-gray-700">Review Pending Verifications (12)</span>
+                <span className="font-semibold text-gray-700">
+                  Review Pending Verifications ({stats?.pendingVerification ?? 0})
+                </span>
               </div>
             </button>
 
@@ -101,7 +145,7 @@ function AdminDashboard() {
                 <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-gray-400 shadow-sm group-hover:text-red-500">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                 </div>
-                <span className="font-semibold text-gray-700">Review Reported Users (8)</span>
+                <span className="font-semibold text-gray-700">Review Reported Users</span>
               </div>
             </Link>
           </div>

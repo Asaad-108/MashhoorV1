@@ -1,32 +1,32 @@
 import { FeatureBox } from "../../components";
 const featuresData = [
   {
-    img: "/src/assets/sparkle.svg",
+    img: "/assets/sparkle.svg",
     heading: "AI-Powered Matching",
     text: "Our intelligent algorithm connects you with the perfect influencers for your brand",
   },
   {
-    img: "/src/assets/target.svg",
+    img: "/assets/target.svg",
     heading: "Precise Targeting",
     text: "Filter by niche, location, engagement rates, and trust scores",
   },
   {
-    img: "/src/assets/trending-up.svg",
+    img: "/assets/trending-up.svg",
     heading: "Analytics & Insights",
     text: "Track campaign performance with real-time analytics and ROI predictions",
   },
   {
-    img: "/src/assets/shield.svg",
+    img: "/assets/shield.svg",
     heading: "Trust Score System",
     text: "Verified influencers with transparent trust ratings and past collaboration history",
   },
   {
-    img: "/src/assets/contact-round.svg",
+    img: "/assets/contact-round.svg",
     heading: "Direct Communication",
     text: "Built-in messaging and outreach tools to streamline collaboration",
   },
   {
-    img: "/src/assets/chart-column.svg",
+    img: "/assets/chart-column.svg",
     heading: "Campaign Management",
     text: "Create, manage, and track all your campaigns in one centralized platform",
   },

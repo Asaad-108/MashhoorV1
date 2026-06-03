@@ -51,7 +51,7 @@ function AccountSettings() {
       showToast("Profile updated successfully!", "success");
     } catch (err: any) {
       console.error(err);
-      showToast(err.response?.data?.message || "Failed to update profile", "error");
+      showToast(err instanceof Error ? err.message : "Failed to update profile", "error");
     } finally {
       setIsSaving(false);
     }
@@ -122,7 +122,7 @@ function AccountSettings() {
           <div className="settings-section-card">
             <h2 className="section-title">
               <img
-                src="/src/assets/lock.svg"
+                src="/assets/lock.svg"
                 alt="Security"
                 width={20}
                 height={20}
@@ -163,7 +163,7 @@ function AccountSettings() {
           <div className="settings-section-card">
             <h2 className="section-title">
               <img
-                src="/src/assets/bell.svg"
+                src="/assets/bell.svg"
                 alt="Notifications"
                 width={20}
                 height={20}
@@ -215,7 +215,7 @@ function AccountSettings() {
 
           <div className="flex flex-col gap-4 mt-8">
             <button className="btn-save-primary" onClick={handleSave} disabled={isSaving}>
-              <img src="/src/assets/save.svg" alt="Save" width={20} height={20} />
+              <img src="/assets/save.svg" alt="Save" width={20} height={20} />
               {isSaving ? "Saving..." : "Save All Changes"}
             </button>
             <button 

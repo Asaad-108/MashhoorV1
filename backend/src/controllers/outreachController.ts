@@ -1,46 +1,47 @@
 import { Response, NextFunction } from "express";
 import { Outreach } from "../models/Outreach";
-import { Campaign } from "../models/Campaign";
 import { AppError } from "../middleware/errorHandler";
 import { AuthRequest, SentimentLabel } from "../types";
+import { Campaign } from "../models/Campaign";
+import { inviteInfluencerToCampaign } from "../services/campaignInviteService";
 
-// POST /api/outreach
-// Business sends outreach to influencer for a campaign
+// POST /api/outreach — same flow as adding to campaign (platform vs email auto)
 export const sendOutreach = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { campaignId, influencerId, message, isAiGenerated = false } = req.body;
+    const { campaignId, influencerId, message, isAiGenerated = false, contactEmail } = req.body;
 
     if (!campaignId || !influencerId || !message) {
       return next(new AppError("campaignId, influencerId, and message are required", 400));
     }
 
-    const campaign = await Campaign.findById(campaignId);
-    if (!campaign) return next(new AppError("Campaign not found", 404));
-
-    if (campaign.business.toString() !== req.user?.userId) {
-      return next(new AppError("Not authorized", 403));
-    }
-
-    // Prevent duplicate outreach
-    const existing = await Outreach.findOne({ campaign: campaignId, influencer: influencerId });
-    if (existing) {
-      return next(new AppError("Outreach already sent to this influencer for this campaign", 409));
-    }
-
-    const outreach = await Outreach.create({
-      campaign: campaignId,
-      business: req.user.userId,
-      influencer: influencerId,
+    const result = await inviteInfluencerToCampaign({
+      campaignId,
+      businessId: req.user!.userId,
+      influencerId,
       message,
+      contactEmail,
       isAiGenerated,
-      status: "sent",
     });
 
-    res.status(201).json({ success: true, message: "Outreach sent", data: outreach });
+    const responseMessage =
+      result.channel === "email"
+        ? "Invitation sent by email — creator is not registered on Mashhoor yet."
+        : "Invitation sent inside Mashhoor.";
+
+    res.status(201).json({
+      success: true,
+      message: responseMessage,
+      data: {
+        outreach: result.outreach,
+        emailInvite: result.emailInvite,
+        channel: result.channel,
+        campaign: result.campaign,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -92,7 +93,7 @@ export const replyToOutreach = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { reply, accept } = req.body; // accept: true/false
+    const { reply, accept } = req.body;
     if (!reply) return next(new AppError("Reply message is required", 400));
 
     const outreach = await Outreach.findById(req.params.id);
@@ -106,8 +107,6 @@ export const replyToOutreach = async (
     outreach.status = accept === true ? "accepted" : accept === false ? "rejected" : "replied";
     outreach.repliedAt = new Date();
 
-    // Run mock sentiment analysis
-    // TODO: Replace with Python ML service call
     const sentiment = mockSentimentAnalysis(reply);
     outreach.sentiment = { ...sentiment, analyzedAt: new Date() };
 
@@ -125,7 +124,9 @@ export const replyToOutreach = async (
     } else if (accept === false) {
       const campaign = await Campaign.findById(outreach.campaign);
       if (campaign && campaign.selectedInfluencers.includes(outreach.influencer)) {
-        campaign.selectedInfluencers = campaign.selectedInfluencers.filter(id => id.toString() !== outreach.influencer.toString());
+        campaign.selectedInfluencers = campaign.selectedInfluencers.filter(
+          (id) => id.toString() !== outreach.influencer.toString()
+        );
         await campaign.save();
       }
     }
@@ -159,7 +160,6 @@ export const updateOutreachStatus = async (
   }
 };
 
-// ─── Mock Sentiment (replace with Python ML call) ─────────────────────────────
 function mockSentimentAnalysis(text: string): { label: SentimentLabel; score: number } {
   const lower = text.toLowerCase();
   const positiveWords = ["great", "happy", "love", "interested", "yes", "absolutely", "excited", "sure"];

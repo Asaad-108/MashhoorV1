@@ -1,9 +1,79 @@
 import { Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { AuthRequest } from "../types";
 import { Campaign } from "../models/Campaign";
 import { Outreach } from "../models/Outreach";
-import { InfluencerProfile } from "../models/InfluencerProfile";
+import { InfluencerProfile, IInfluencerProfile } from "../models/InfluencerProfile";
 import { AppError } from "../middleware/errorHandler";
+import { calculateTrustScore } from "../services/trustScoreService";
+
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const getLast6Months = () =>
+  Array.from({ length: 6 }).map((_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (5 - i));
+    return { month: months[d.getMonth()], year: d.getFullYear(), numericMonth: d.getMonth() };
+  });
+
+const toBusinessId = (userId: string) => new mongoose.Types.ObjectId(userId);
+
+const toTimestamp = (value: Date | string | undefined) =>
+  value ? new Date(value).getTime() : 0;
+
+/** Refresh YouTube stats for seeded demo accounts (@youtube.test emails). */
+async function syncYouTubeStatsIfSeeded(profile: IInfluencerProfile): Promise<void> {
+  const user = profile.user as { email?: string } | undefined;
+  if (!user?.email?.endsWith("@youtube.test")) return;
+
+  const channelId = user.email.split("@")[0];
+  const API_KEY = process.env.YOUTUBE_API_KEY;
+  if (!API_KEY) return;
+
+  try {
+    let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${API_KEY}`;
+    let statsRes = await fetch(statsURL);
+    let statsData = (await statsRes.json()) as { items?: Array<{ statistics: Record<string, string>; snippet: { title: string; description?: string } }> };
+    let channelData = statsData.items?.[0];
+
+    if (!channelData && profile.platforms?.youtube?.handle) {
+      const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(profile.platforms.youtube.handle)}&maxResults=1&key=${API_KEY}`;
+      const searchRes = await fetch(searchURL);
+      const searchData = (await searchRes.json()) as { items?: Array<{ snippet: { channelId: string } }> };
+      const realChannelId = searchData.items?.[0]?.snippet.channelId;
+      if (realChannelId) {
+        statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${realChannelId}&key=${API_KEY}`;
+        statsRes = await fetch(statsURL);
+        statsData = (await statsRes.json()) as typeof statsData;
+        channelData = statsData.items?.[0];
+      }
+    }
+
+    if (!channelData) return;
+
+    const subs = parseInt(channelData.statistics.subscriberCount || "0", 10);
+    const views = parseInt(channelData.statistics.viewCount || "0", 10);
+    const videoCount = parseInt(channelData.statistics.videoCount || "0", 10);
+    const avgViews = Math.floor(views / (videoCount || 1)) || 0;
+    const engagementRate = Math.min(100, Number(((avgViews / (subs || 1)) * 100).toFixed(2)));
+
+    if (!profile.platforms.youtube) {
+      profile.platforms.youtube = { handle: "", subscribers: 0, avgViews: 0, engagementRate: 0 };
+    }
+    profile.platforms.youtube.subscribers = subs;
+    profile.platforms.youtube.avgViews = avgViews;
+    profile.platforms.youtube.engagementRate = engagementRate;
+    profile.platforms.youtube.handle = channelData.snippet.title;
+    profile.totalFollowers = subs;
+    profile.avgEngagementRate = engagementRate;
+    if (channelData.snippet.description) {
+      profile.bio = channelData.snippet.description.substring(0, 490);
+    }
+    await profile.save();
+  } catch (err) {
+    console.error("Dashboard YouTube sync failed:", err);
+  }
+}
 
 export const getInfluencerDashboardStats = async (
   req: AuthRequest,
@@ -14,8 +84,29 @@ export const getInfluencerDashboardStats = async (
     const userId = req.user?.userId;
     if (!userId) return next(new AppError("User ID missing", 400));
 
-    // Get influencer profile for trust score
-    const profile = await InfluencerProfile.findOne({ user: userId });
+    let profile = await InfluencerProfile.findOne({ user: userId }).populate("user", "name email avatar");
+
+    if (!profile) {
+      profile = await InfluencerProfile.create({
+        user: userId,
+        niche: ["Unspecified"],
+        location: "",
+        country: "",
+        bio: "",
+        platforms: {},
+      });
+      await profile.populate("user", "name email avatar");
+    }
+
+    await syncYouTubeStatsIfSeeded(profile);
+
+    const { score, breakdown } = await calculateTrustScore(profile);
+    profile.trustScore = score;
+    profile.trustScoreBreakdown = breakdown;
+    await profile.save();
+
+    const last6Months = getLast6Months();
+    const earningsByMonth = last6Months.map((m) => ({ month: m.month, amount: 0 }));
 
     // Active campaigns (where influencer is selected and campaign is active)
     const activeCampaignsCount = await Campaign.countDocuments({
@@ -47,8 +138,17 @@ export const getInfluencerDashboardStats = async (
         totalEarnings,
         activeCampaigns: activeCampaignsCount,
         pendingRequests: pendingRequestsCount,
-        trustScore: profile?.trustScore || 0,
+        trustScore: profile.trustScore,
         recentCampaigns,
+        earningsByMonth,
+        profileAnalytics: {
+          totalFollowers: profile.totalFollowers,
+          avgEngagementRate: profile.avgEngagementRate,
+          platforms: profile.platforms,
+          trustScoreBreakdown: profile.trustScoreBreakdown,
+          niche: profile.niche,
+          isVerified: profile.isVerified,
+        },
       },
     });
   } catch (err) {
@@ -65,24 +165,34 @@ export const getBusinessDashboardStats = async (
     const userId = req.user?.userId;
     if (!userId) return next(new AppError("User ID missing", 400));
 
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return next(new AppError("Invalid user ID", 400));
+    }
+
+    const businessId = toBusinessId(userId);
+
     // Total campaigns
-    const totalCampaigns = await Campaign.countDocuments({ business: userId });
+    const totalCampaigns = await Campaign.countDocuments({ business: businessId });
 
     // Influencers contacted
-    const influencersContacted = await Outreach.countDocuments({ business: userId });
+    const influencersContacted = await Outreach.countDocuments({ business: businessId });
 
     // Shortlisted / Accepted
     const shortlisted = await Outreach.countDocuments({
-      business: userId,
+      business: businessId,
       status: { $in: ["accepted", "replied"] },
     });
 
-    // Recent Activity (Campaign creations and Outreaches)
-    const recentCampaigns = await Campaign.find({ business: userId })
+    // Recent campaigns for dashboard list
+    const recentCampaignsList = await Campaign.find({ business: businessId })
       .sort({ createdAt: -1 })
-      .limit(2);
+      .limit(5)
+      .select("title status createdAt budget progress");
+
+    // Recent Activity (Campaign creations and Outreaches)
+    const recentCampaigns = recentCampaignsList.slice(0, 2);
       
-    const recentOutreaches = await Outreach.find({ business: userId })
+    const recentOutreaches = await Outreach.find({ business: businessId })
       .sort({ updatedAt: -1 })
       .limit(4)
       .populate("influencer", "name");
@@ -117,10 +227,11 @@ export const getBusinessDashboardStats = async (
           date: o.updatedAt,
         };
       })
-    ].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+    ]
+      .sort((a, b) => toTimestamp(b.date) - toTimestamp(a.date))
+      .slice(0, 5);
 
     // ─── Real-Time Charts Data Aggregation ───
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const last6Months = Array.from({ length: 6 }).map((_, i) => {
       const d = new Date();
       d.setMonth(d.getMonth() - (5 - i));
@@ -134,8 +245,8 @@ export const getBusinessDashboardStats = async (
 
     // Campaign Activity
     const campaignsLast6Months = await Campaign.find({
-      business: userId,
-      createdAt: { $gte: sixMonthsAgo }
+      business: businessId,
+      createdAt: { $gte: sixMonthsAgo },
     });
 
     const campaignActivity = last6Months.map(m => {
@@ -148,12 +259,18 @@ export const getBusinessDashboardStats = async (
 
     // Engagement Trend
     const outreachesLast6Months = await Outreach.find({
-      business: userId,
+      business: businessId,
       status: { $in: ["accepted", "replied"] },
-      updatedAt: { $gte: sixMonthsAgo }
+      updatedAt: { $gte: sixMonthsAgo },
     }).populate("influencer", "_id");
 
-    const influencerIds = outreachesLast6Months.map(o => (o.influencer as any)._id);
+    const influencerIds = outreachesLast6Months
+      .map((o) => {
+        const inf = o.influencer as mongoose.Types.ObjectId | { _id?: mongoose.Types.ObjectId };
+        if (inf && typeof inf === "object" && "_id" in inf && inf._id) return inf._id;
+        return inf as mongoose.Types.ObjectId;
+      })
+      .filter(Boolean);
     const influencerProfiles = await InfluencerProfile.find({ user: { $in: influencerIds } });
 
     const engagementMap = new Map();
@@ -173,8 +290,13 @@ export const getBusinessDashboardStats = async (
       let monthTotal = 0;
       let monthCount = 0;
 
-      outreachesInMonth.forEach(o => {
-        const rate = engagementMap.get((o.influencer as any)._id.toString()) || 0;
+      outreachesInMonth.forEach((o) => {
+        const inf = o.influencer as mongoose.Types.ObjectId | { _id?: mongoose.Types.ObjectId };
+        const infId =
+          inf && typeof inf === "object" && "_id" in inf && inf._id
+            ? inf._id.toString()
+            : (inf as mongoose.Types.ObjectId)?.toString?.() ?? "";
+        const rate = engagementMap.get(infId) || 0;
         monthTotal += rate;
         monthCount++;
         totalEngagement += rate;
@@ -197,6 +319,7 @@ export const getBusinessDashboardStats = async (
         shortlisted,
         avgEngagement,
         recentActivity,
+        recentCampaigns: recentCampaignsList,
         campaignActivity,
         engagementTrend,
       },

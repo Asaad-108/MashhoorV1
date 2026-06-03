@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import { campaignApi } from "../../api/campaignApi";
 import type { Campaign } from "../../api/campaignApi";
-import { outreachApi } from "../../api/outreachApi";
+import { isPlaceholderInfluencerEmail, isRegisteredOnPlatform } from "../../api/outreachApi";
 import { influencerApi } from "../../api/influencerApi";
 import type { ROIPredictionResult } from "../../api/influencerApi";
 
@@ -14,6 +14,7 @@ interface InfluencerProfile {
     name: string;
     email: string;
     avatar: string;
+    hasSignedUp?: boolean;
   };
   niche: string[];
   location: string;
@@ -60,6 +61,7 @@ export default function InfluencerDetails() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState("");
   const [message, setMessage] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [modalError, setModalError] = useState("");
 
@@ -73,7 +75,7 @@ export default function InfluencerDetails() {
           setTrustAiMetrics(res.data.data.aiModelMetrics);
         }
       } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to load profile.");
+        setError(err instanceof Error ? err.message : "Failed to load profile.");
       } finally {
         setLoading(false);
       }
@@ -89,24 +91,41 @@ export default function InfluencerDetails() {
     }
   }, [showModal]);
 
+  const isOnPlatform = isRegisteredOnPlatform(profile?.user);
+  const needsContactEmail =
+    !isOnPlatform && isPlaceholderInfluencerEmail(profile?.user?.email);
+
   const handleSendRequest = async () => {
     if (!selectedCampaign) return setModalError("Please select a campaign");
     if (!message) return setModalError("Please add a message");
-    
+    if (needsContactEmail && !contactEmail.trim()) {
+      return setModalError("Add their real email — Mashhoor will send the invitation automatically.");
+    }
+
     setSending(true);
     setModalError("");
     try {
       if (profile) {
-        await outreachApi.send(selectedCampaign, profile.user._id, message);
+        const result = await campaignApi.addInfluencer(
+          selectedCampaign,
+          profile.user._id,
+          message,
+          needsContactEmail ? contactEmail.trim() : undefined
+        );
         setShowModal(false);
         setMessage("");
+        setContactEmail("");
         setSelectedCampaign("");
-        alert("Request sent successfully!");
+        alert(
+          result.channel === "email"
+            ? "Added to campaign. Mashhoor emailed them an invitation to join."
+            : "Added to campaign. They will see your invite in Mashhoor."
+        );
       }
-    } catch(err: any) {
-       setModalError(err.response?.data?.message || "Failed to send request");
+    } catch (err: unknown) {
+      setModalError(err instanceof Error ? err.message : "Failed to add to campaign");
     } finally {
-       setSending(false);
+      setSending(false);
     }
   };
 
@@ -479,6 +498,24 @@ export default function InfluencerDetails() {
               )}
             </div>
 
+            {needsContactEmail && (
+              <div className="mb-4">
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  This creator is not registered on Mashhoor. Add their email to send an invitation.
+                </p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Their email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="creator@email.com"
+                  className="w-full border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-purple-500 bg-gray-50"
+                />
+              </div>
+            )}
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Message to Influencer</label>
               <textarea 
@@ -502,7 +539,7 @@ export default function InfluencerDetails() {
                 disabled={sending || campaigns.length === 0}
                 className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {sending ? "Sending..." : "Send Request"}
+                {sending ? "Adding..." : "Add to Campaign"}
               </button>
             </div>
           </div>

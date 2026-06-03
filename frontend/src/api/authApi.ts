@@ -1,6 +1,6 @@
 import api from "./client";
 
-export type UserRole = "business" | "influencer";
+export type UserRole = "business" | "influencer" | "admin";
 
 export type AuthUser = {
   _id: string;
@@ -23,9 +23,16 @@ export const authApi = {
     name: string,
     email: string,
     password: string,
-    role: UserRole
+    role: UserRole,
+    inviteToken?: string
   ): Promise<AuthResponse> => {
-    const { data } = await api.post("/auth/register", { name, email, password, role });
+    const { data } = await api.post("/auth/register", {
+      name,
+      email,
+      password,
+      role,
+      ...(inviteToken ? { inviteToken } : {}),
+    });
     return data.data;
   },
 
@@ -51,5 +58,15 @@ export const authApi = {
   updateProfile: async (payload: { name?: string; email?: string; phone?: string }): Promise<AuthUser> => {
     const { data } = await api.put("/auth/profile", payload);
     return data.data.user;
+  },
+
+  forgotPassword: async (email: string, role: UserRole): Promise<string> => {
+    const { data } = await api.post("/auth/forgot-password", { email, role });
+    return data.message as string;
+  },
+
+  resetPassword: async (token: string, password: string): Promise<string> => {
+    const { data } = await api.post("/auth/reset-password", { token, password });
+    return data.message as string;
   },
 };

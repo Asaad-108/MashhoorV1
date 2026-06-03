@@ -34,11 +34,14 @@ function DashboardNav() {
         <Title />
       </Link>
       <div className="flex items-center gap-5 text-lg">
+        <Link to={"/influencer-messages"} className="cursor-pointer" title="Campaign messages">
+          <img src="/assets/message-square-green.svg" alt="Messages" width={22} height={22} />
+        </Link>
         <Link
           to={"/influencer-requests"}
           className="flex items-center gap-2 cursor-pointer"
         >
-          <img src="src/assets/users.svg" alt="Requests" />
+          <img src="/assets/users.svg" alt="Requests" />
           {requestCount > 0 && (
             <span className="bg-red-500 text-white rounded-full px-2 py-0.5 text-sm font-medium">
               {requestCount}

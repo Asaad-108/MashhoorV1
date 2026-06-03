@@ -10,6 +10,7 @@ import campaignRoutes from "./routes/campaigns";
 import outreachRoutes from "./routes/outreach";
 import messageRoutes from "./routes/messages";
 import dashboardRoutes from "./routes/dashboard";
+import adminRoutes from "./routes/admin";
 import { errorHandler, notFound } from "./middleware/errorHandler";
 
 const app = express();
@@ -64,6 +65,7 @@ app.use("/api/campaigns", campaignRoutes);
 app.use("/api/outreach", outreachRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ─── 404 + Error Handler (always last) ───────────────────────────────────────
 app.use(notFound);
