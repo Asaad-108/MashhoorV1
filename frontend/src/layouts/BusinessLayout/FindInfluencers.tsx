@@ -10,6 +10,7 @@ function FindInfluencers() {
   const [search, setSearch] = useState("");
   const [niche, setNiche] = useState("");
   const [country, setCountry] = useState("");
+  const [platform, setPlatform] = useState<"instagram" | "youtube" | "">("");
   const [minTrustScore, setMinTrustScore] = useState("");
   const [minFollowers, setMinFollowers] = useState(0);
   const [sort, setSort] = useState<"trustScore" | "followers" | "engagement" | "newest">("newest");
@@ -98,6 +99,7 @@ function FindInfluencers() {
         ...(debouncedSearch && { search: debouncedSearch }),
         ...(niche && { targetNiche: niche }), // Use targetNiche for scoring
         ...(country && { country }),
+        ...(platform && { platform }),
         ...(minTrustScore && { minTrustScore: Number(minTrustScore) }),
         ...(minFollowers > 0 && { minFollowers }),
       };
@@ -135,6 +137,7 @@ function FindInfluencers() {
       ...(debouncedSearch && { search: debouncedSearch }),
       ...(niche && { niche }),
       ...(country && { country }),
+      ...(platform && { platform }),
       ...(minTrustScore && { minTrustScore: Number(minTrustScore) }),
       ...(minFollowers > 0 && { minFollowers }),
       sort,
@@ -145,12 +148,13 @@ function FindInfluencers() {
     if (isRecommendedMode) {
       fetchRecommendations();
     }
-  }, [debouncedSearch, niche, country, minTrustScore, minFollowers, sort, setFilters, setPage]);
+  }, [debouncedSearch, niche, country, platform, minTrustScore, minFollowers, sort, setFilters, setPage]);
 
   const resetFilters = () => {
     setSearch("");
     setNiche("");
     setCountry("");
+    setPlatform("");
     setMinTrustScore("");
     setMinFollowers(0);
     setSort("newest");
@@ -171,6 +175,19 @@ function FindInfluencers() {
           </div>
 
           <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Platform</label>
+              <select
+                value={platform}
+                onChange={(e) => setPlatform(e.target.value as "instagram" | "youtube" | "")}
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 outline-none focus:border-purple-500"
+              >
+                <option value="">All platforms</option>
+                <option value="instagram">Instagram</option>
+                <option value="youtube">YouTube</option>
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Niche</label>
               <select
@@ -322,7 +339,7 @@ function FindInfluencers() {
                   key={inf._id}
                   id={inf.user?._id ?? ""}
                   name={inf.user?.name ?? "Unknown"}
-                  image={inf.user?.avatar ?? `https://ui-avatars.com/api/?name=${inf.user?.name}&background=8b5cf6&color=fff`}
+                  image={inf.user?.avatar || `https://ui-avatars.com/api/?name=${inf.user?.name || "Unknown"}&background=8b5cf6&color=fff`}
                   niche={inf.niche.join(", ")}
                   location={inf.location}
                   followers={inf.totalFollowers >= 1000 ? `${(inf.totalFollowers / 1000).toFixed(0)}K` : String(inf.totalFollowers)}

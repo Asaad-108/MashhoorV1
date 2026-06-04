@@ -7,6 +7,7 @@ import { InfluencerProfile, IInfluencerProfile } from "../models/InfluencerProfi
 import { AppError } from "../middleware/errorHandler";
 import { calculateTrustScore } from "../services/trustScoreService";
 import { syncYouTubeForProfile } from "../services/youtubeSyncService";
+import { getUnifiedPlatformMetrics } from "../services/platformMetricsService";
 import { Notification } from "../models/Notification";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -69,7 +70,6 @@ export const getInfluencerDashboardStats = async (
     await profile.save();
 
     const last6Months = getLast6Months();
-    const earningsByMonth = last6Months.map((m) => ({ month: m.month, amount: 0 }));
 
     const acceptedOutreachCount = await Outreach.countDocuments({
       influencer: influencerId,
@@ -112,8 +112,30 @@ export const getInfluencerDashboardStats = async (
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .slice(0, 3);
 
-    // Total earnings (simplified: 0 for now until payment model is built)
-    const totalEarnings = 0;
+    const allAcceptedOutreaches = await Outreach.find({
+      influencer: influencerId,
+      status: "accepted",
+    }).populate("campaign");
+
+    let totalEarnings = 0;
+    
+    // We must map it with year so we can find it properly in the loop
+    const earningsByMonth = last6Months.map((m) => ({ month: m.month, year: m.year, numericMonth: m.numericMonth, amount: 0 }));
+
+    allAcceptedOutreaches.forEach((o) => {
+      const camp = o.campaign as any;
+      if (camp && camp.budget && camp.budget.total) {
+        totalEarnings += camp.budget.total;
+        
+        const d = new Date(o.updatedAt);
+        const mIndex = earningsByMonth.findIndex(
+          (m) => m.month === months[d.getMonth()] && m.year === d.getFullYear()
+        );
+        if (mIndex !== -1) {
+          earningsByMonth[mIndex].amount += camp.budget.total;
+        }
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -278,7 +300,8 @@ export const getBusinessDashboardStats = async (
 
     const engagementMap = new Map();
     influencerProfiles.forEach(p => {
-      engagementMap.set(p.user.toString(), p.avgEngagementRate || 0);
+      const metrics = getUnifiedPlatformMetrics(p);
+      engagementMap.set(p.user.toString(), metrics.engagementRate || 0);
     });
 
     let totalEngagement = 0;

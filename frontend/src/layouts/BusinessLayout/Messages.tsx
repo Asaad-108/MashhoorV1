@@ -43,13 +43,16 @@ function Messages() {
     loadConversations();
   }, [loadConversations]);
 
-  const refreshMessages = useCallback(async (conversationId: string, showLoader = false) => {
-    if (showLoader) setLoadingMsgs(true);
+  const refreshMessages = useCallback(async (conversationId: string, isFirstLoad = false) => {
+    if (isFirstLoad) {
+      setLoadingMsgs(true);
+      setMessages([]); // Clear old messages immediately in the UI
+    }
     try {
       const data = await messageApi.getMessages(conversationId);
-      setMessages((prev) => mergeMessagesById(prev, data));
+      setMessages((prev) => isFirstLoad ? data : mergeMessagesById(prev, data));
     } finally {
-      if (showLoader) setLoadingMsgs(false);
+      if (isFirstLoad) setLoadingMsgs(false);
     }
   }, []);
 
@@ -98,6 +101,19 @@ function Messages() {
       alert(err instanceof Error ? err.message : "Failed to send");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    if (!activeId) return;
+    if (!window.confirm("Are you sure you want to delete this chat? This cannot be undone.")) return;
+    try {
+      await messageApi.deleteConversation(activeId);
+      setConversations((prev) => prev.filter((c) => c._id !== activeId));
+      setActiveId(null);
+      setMessages([]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete chat");
     }
   };
 
@@ -175,24 +191,32 @@ function Messages() {
             </div>
           ) : (
             <>
-              <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-                <img
-                  src={
-                    influencer?.avatar ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer?.name || "User")}`
-                  }
-                  alt=""
-                  className="w-10 h-10 rounded-full"
-                />
-                <div>
-                  <h3 className="font-bold text-gray-900">{influencer?.name}</h3>
-                  <p className="text-xs text-purple-600">{campaignTitle}</p>
-                  {directChat && (
-                    <p className="text-xs text-green-600 mt-0.5">
-                      Direct chat — assistant stepped back
-                    </p>
-                  )}
+              <div className="p-4 border-b border-gray-100 flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={
+                      influencer?.avatar ||
+                      `https://ui-avatars.com/api/?name=${encodeURIComponent(influencer?.name || "User")}`
+                    }
+                    alt=""
+                    className="w-10 h-10 rounded-full"
+                  />
+                  <div>
+                    <h3 className="font-bold text-gray-900">{influencer?.name}</h3>
+                    <p className="text-xs text-purple-600">{campaignTitle}</p>
+                    {directChat && (
+                      <p className="text-xs text-green-600 mt-0.5">
+                        Direct chat — assistant stepped back
+                      </p>
+                    )}
+                  </div>
                 </div>
+                <button 
+                  onClick={handleDeleteChat}
+                  className="text-xs text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 transition-colors"
+                >
+                  Delete Chat
+                </button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4">

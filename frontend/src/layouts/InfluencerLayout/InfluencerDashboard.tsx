@@ -100,12 +100,11 @@ function InfluencerDashboard() {
               </div>
             )}
             {!loading && analytics && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
                 {[
                   { label: "Engagement authenticity", value: breakdown.engagementAuthenticity },
                   { label: "Follower quality", value: breakdown.followerQuality },
                   { label: "Content consistency", value: breakdown.contentConsistency },
-                  { label: "Collaboration history", value: breakdown.collaborationHistory },
                 ].map((item) => (
                   <div key={item.label} className="text-center rounded-lg border border-purple-100 py-3 px-2">
                     <div className="text-xl font-bold text-purple-700">{item.value}%</div>

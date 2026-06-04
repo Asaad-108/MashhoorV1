@@ -145,4 +145,8 @@ export const messageApi = {
     });
     return data.data;
   },
+
+  deleteConversation: async (conversationId: string): Promise<void> => {
+    await api.delete(`/messages/${conversationId}`);
+  },
 };

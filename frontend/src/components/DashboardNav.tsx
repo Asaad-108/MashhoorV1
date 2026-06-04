@@ -5,7 +5,7 @@ import { useNotificationSummary } from "../hooks/useNotificationSummary";
 
 function DashboardNav() {
   const summary = useNotificationSummary(true);
-  const requestsBadge = summary.pendingRequests + summary.unreadNotifications;
+  const requestsBadge = summary.pendingRequests;
   const messagesBadge = summary.unreadMessages;
 
   return (

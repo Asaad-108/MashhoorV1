@@ -331,3 +331,36 @@ export const askCampaignAssistant = async (
     next(err);
   }
 };
+
+// DELETE /api/messages/:conversationId
+export const deleteConversation = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const convo = await Conversation.findById(req.params.conversationId);
+    if (!convo) return next(new AppError("Conversation not found", 404));
+
+    const isParticipant = convo.participants.some(
+      (p) => p.toString() === req.user?.userId
+    );
+    if (!isParticipant) return next(new AppError("Not authorized", 403));
+
+    const filter: Record<string, unknown> = convo.campaign
+      ? { campaign: convo.campaign }
+      : {
+          $or: [
+            { sender: convo.participants[0], receiver: convo.participants[1] },
+            { sender: convo.participants[1], receiver: convo.participants[0] },
+          ],
+        };
+
+    await Message.deleteMany(filter);
+    await convo.deleteOne();
+
+    res.status(200).json({ success: true, message: "Chat deleted" });
+  } catch (err) {
+    next(err);
+  }
+};

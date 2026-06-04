@@ -31,6 +31,7 @@ export type InfluencerProfile = {
 export type InfluencerFilters = {
   niche?: string;
   country?: string;
+  platform?: "instagram" | "youtube" | "";
   minFollowers?: number;
   maxFollowers?: number;
   minTrustScore?: number;

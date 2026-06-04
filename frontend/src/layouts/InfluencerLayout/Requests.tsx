@@ -61,13 +61,6 @@ function Requests() {
           <p className="page-subtitle">
             Review and respond to collaboration opportunities
           </p>
-          <p className="text-sm text-purple-600 mt-2">
-            Already invited? Open{" "}
-            <Link to="/influencer-messages" className="font-semibold underline">
-              Campaign Messages
-            </Link>{" "}
-            to read the brand outreach and ask the Mashhoor assistant about campaign details.
-          </p>
         </div>
 
         <div>

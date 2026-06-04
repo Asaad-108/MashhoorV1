@@ -3,12 +3,14 @@ import app from "./app";
 import connectDB from "./config/database";
 import { setupEmailService } from "./services/emailService";
 import { processDueInterestChecks } from "./services/campaignInterestService";
+import { setupCronJobs } from "./jobs/syncJobs";
 
 const PORT = process.env.PORT || 5001;
 
 const startServer = async () => {
   await connectDB();
   await setupEmailService();
+  setupCronJobs();
 
   let interestInterval: ReturnType<typeof setInterval> | undefined;
 

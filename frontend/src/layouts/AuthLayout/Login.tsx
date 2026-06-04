@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Title } from "../../components";
 import { useAuth } from "../../context/AuthContext";
 
-type Role = "business" | "influencer" | "admin";
+type Role = "business" | "influencer";
 
 function Login() {
   const { login } = useAuth();
@@ -81,14 +81,6 @@ function Login() {
             <img src="/assets/userWhite.svg" alt="Influencer" width={16} height={16} />
             Influencer
           </button>
-          <button
-            type="button"
-            onClick={() => setSelectedRole("admin")}
-            className={`flex-1 btn-login-outline rounded-lg py-3 flex justify-center items-center gap-2 font-medium transition-all ${selectedRole === "admin" ? "border-purple-500 text-purple-600 bg-purple-50" : ""
-              }`}
-          >
-            Admin
-          </button>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -144,7 +136,7 @@ function Login() {
           >
             {loading
               ? "Logging in..."
-              : `Login as ${selectedRole === "business" ? "Business" : selectedRole === "admin" ? "Admin" : "Influencer"}`}
+              : `Login as ${selectedRole === "business" ? "Business" : "Influencer"}`}
           </button>
         </form>
 

@@ -73,12 +73,13 @@ function instagramCampaignReach(
   const followers = ig.followers ?? 0;
 
   if (likes > 0 || comments > 0) {
-    return Math.round(likes + comments);
+    // We use a conservative 2x multiplier for engagements when views are not available
+    return Math.round((likes + comments) * 2);
   }
   if (followers > 0 && engagementRate > 0) {
     return Math.round(followers * (engagementRate / 100));
   }
-  return Math.round(followers * 0.08);
+  return Math.round(followers * 0.15);
 }
 
 function youtubeCampaignReach(

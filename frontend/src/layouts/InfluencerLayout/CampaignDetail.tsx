@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { campaignApi } from "../../api";
 import type { Campaign } from "../../api/campaignApi";
 
@@ -147,9 +147,9 @@ function CampaignDetails() {
               </div>
 
               <div className="space-y-3">
-                <button className="w-full text-purple-600 font-medium text-sm hover:underline mt-2">
+                <Link to="/influencer-messages" className="w-full block text-center text-purple-600 font-medium text-sm hover:underline mt-2">
                   Message Brand
-                </button>
+                </Link>
               </div>
             </div>
           </div>
