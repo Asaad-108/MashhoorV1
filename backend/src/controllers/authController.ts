@@ -124,8 +124,8 @@ export const register = async (
       await InfluencerProfile.create({
         user: user._id,
         niche: ["Unspecified"],
-        location: "",
-        country: "",
+        location: "Pakistan",
+        country: "Pakistan",
         bio: "",
         platforms: {},
       });

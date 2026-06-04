@@ -6,16 +6,32 @@ import { AppError } from "../middleware/errorHandler";
 import { AuthRequest } from "../types";
 import mongoose from "mongoose";
 import { runCampaignAssistantPipeline } from "../services/campaignAssistantService";
+import {
+  handleInfluencerMessageForInterest,
+  processDueInterestChecks,
+  scheduleInterestCheck,
+  sendInterestPromptIfDue,
+} from "../services/campaignInterestService";
+import {
+  isCampaignFollowUpQuestion,
+  isInterestedReply,
+} from "../utils/sentimentAnalysis";
+import { isDirectChatActive } from "../services/directChatService";
 
 const formatMessage = (msg: InstanceType<typeof Message>) => {
   const m = msg.toObject();
   const isAssistant =
-    msg.messageType === "assistant_reply" || msg.messageType === "assistant_query";
+    msg.messageType === "assistant_reply" ||
+    msg.messageType === "assistant_query" ||
+    msg.messageType === "interest_prompt" ||
+    msg.messageType === "interest_handoff";
   return {
     ...m,
     isAssistant,
     displayName:
-      msg.messageType === "assistant_reply"
+      msg.messageType === "assistant_reply" ||
+      msg.messageType === "interest_prompt" ||
+      msg.messageType === "interest_handoff"
         ? "Mashhoor Assistant"
         : msg.messageType === "outreach"
           ? "Campaign invitation"
@@ -64,6 +80,11 @@ export const getMessages = async (
       (p) => p.toString() === req.user?.userId
     );
     if (!isParticipant) return next(new AppError("Not authorized", 403));
+
+    if (convo.campaign && !(await isDirectChatActive(convo))) {
+      await sendInterestPromptIfDue(convo);
+      await processDueInterestChecks();
+    }
 
     const filter: Record<string, unknown> = convo.campaign
       ? { campaign: convo.campaign }
@@ -183,11 +204,74 @@ export const askCampaignAssistant = async (
     if (!convo.campaign) {
       return next(new AppError("No campaign linked to this conversation", 400));
     }
+
+    if (await isDirectChatActive(convo)) {
+      return next(
+        new AppError(
+          "The Mashhoor assistant has stepped back. Message the brand directly in this chat.",
+          403
+        )
+      );
+    }
+
     const campaign = await Campaign.findById(convo.campaign);
     if (!campaign) return next(new AppError("Campaign not found", 404));
 
     const businessId = convo.participants.find((p) => p.toString() !== userId);
     const business = businessId ? await User.findById(businessId) : null;
+
+    const trimmed = content.trim();
+    const answeringInterestPrompt =
+      convo.interestPromptSentInCycle &&
+      isInterestedReply(trimmed) &&
+      !isCampaignFollowUpQuestion(trimmed);
+
+    const userMsg = await Message.create({
+      sender: new mongoose.Types.ObjectId(userId),
+      receiver: businessId,
+      campaign: campaign._id,
+      outreach: convo.outreach,
+      content: trimmed,
+      messageType: "assistant_query",
+    });
+
+    if (answeringInterestPrompt) {
+      await handleInfluencerMessageForInterest({
+        conversationId: convo._id,
+        influencerId: userId!,
+        content: trimmed,
+      });
+
+      const handoffMsg = await Message.findOne({
+        campaign: campaign._id,
+        messageType: "interest_handoff",
+        receiver: new mongoose.Types.ObjectId(userId),
+      })
+        .sort({ createdAt: -1 })
+        .limit(1);
+
+      const populatedUser = await userMsg.populate("sender", "name avatar role");
+
+      res.status(201).json({
+        success: true,
+        data: {
+          userMessage: formatMessage(populatedUser),
+          assistantMessage: handoffMsg
+            ? formatMessage(handoffMsg)
+            : formatMessage(
+                await Message.create({
+                  receiver: new mongoose.Types.ObjectId(userId),
+                  campaign: campaign._id,
+                  outreach: convo.outreach,
+                  content:
+                    "You're all set — you can now chat directly with the brand in this thread.",
+                  messageType: "interest_handoff",
+                })
+              ),
+        },
+      });
+      return;
+    }
 
     const priorMessages = await Message.find({
       campaign: campaign._id,
@@ -208,19 +292,10 @@ export const askCampaignAssistant = async (
     }
 
     const { reply, trace } = await runCampaignAssistantPipeline({
-      userMessage: content.trim(),
+      userMessage: trimmed,
       chatHistory,
       campaign,
       businessName: business?.name,
-    });
-
-    const userMsg = await Message.create({
-      sender: new mongoose.Types.ObjectId(userId),
-      receiver: businessId,
-      campaign: campaign._id,
-      outreach: convo.outreach,
-      content: content.trim(),
-      messageType: "assistant_query",
     });
 
     const botMsg = await Message.create({
@@ -234,12 +309,21 @@ export const askCampaignAssistant = async (
 
     convo.lastMessage = reply.slice(0, 160);
     convo.lastMessageAt = new Date();
+    scheduleInterestCheck(convo);
     await convo.save();
+
+    await handleInfluencerMessageForInterest({
+      conversationId: convo._id,
+      influencerId: userId!,
+      content: trimmed,
+    });
+
+    const populatedUser = await userMsg.populate("sender", "name avatar role");
 
     res.status(201).json({
       success: true,
       data: {
-        userMessage: formatMessage(userMsg),
+        userMessage: formatMessage(populatedUser),
         assistantMessage: formatMessage(botMsg),
       },
     });

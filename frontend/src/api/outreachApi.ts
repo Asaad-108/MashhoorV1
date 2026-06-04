@@ -81,7 +81,9 @@ export type MessageType =
   | "direct"
   | "outreach"
   | "assistant_query"
-  | "assistant_reply";
+  | "assistant_reply"
+  | "interest_prompt"
+  | "interest_handoff";
 
 export type Message = {
   _id: string;
@@ -109,6 +111,7 @@ export type Conversation = {
   lastMessage?: string;
   lastMessageAt?: string;
   unreadCount: Record<string, number>;
+  directChatActive?: boolean;
 };
 
 export const messageApi = {

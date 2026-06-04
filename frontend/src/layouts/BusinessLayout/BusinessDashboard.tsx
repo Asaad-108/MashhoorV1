@@ -1,17 +1,19 @@
-import { Link, useLocation } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { useCallback, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { getBusinessDashboardStats, type BusinessDashboardStats } from "../../api/dashboardApi";
+import { useLiveRefresh } from "../../hooks/useLiveRefresh";
 
 function BusinessDashboard() {
   const { user } = useAuth();
-  const location = useLocation();
   const [stats, setStats] = useState<BusinessDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
+  const isFirstLoad = useRef(true);
+
   const fetchStats = useCallback(async () => {
-    setLoading(true);
+    if (isFirstLoad.current) setLoading(true);
     try {
       setLoadError("");
       const data = await getBusinessDashboardStats();
@@ -21,13 +23,14 @@ function BusinessDashboard() {
       setLoadError(err instanceof Error ? err.message : "Failed to load analytics");
     } finally {
       setLoading(false);
+      isFirstLoad.current = false;
     }
   }, []);
 
-  // Refetch whenever user lands on this page (e.g. after creating a campaign)
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats, location.key]);
+  useLiveRefresh(fetchStats, {
+    intervalMs: 8_000,
+    events: ["outreach_handled", "dashboard_refresh", "messages_updated"],
+  });
 
   const maxCampaigns = Math.max(...(stats?.campaignActivity?.map((a: any) => a.count) || [0]), 1);
   const maxEngagement = Math.max(...(stats?.engagementTrend?.map((a: any) => a.rate) || [0]), 5);
@@ -49,7 +52,7 @@ function BusinessDashboard() {
           )}
         </div>
 
-        <div className="grid grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-6 mb-8">
           <div className="stat-card">
             <div className="flex justify-between items-start">
               <span className="stat-label">Total Campaigns</span>
@@ -80,6 +83,17 @@ function BusinessDashboard() {
             </div>
             <div className="stat-number">{loading ? "-" : stats?.influencersContacted || 0}</div>
             <div className="stat-trend text-gray-400">Outreach requests</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="flex justify-between items-start">
+              <span className="stat-label">Active Campaigns</span>
+              <div className="text-gray-400">
+                <img src="/assets/briefcase-business-.svg" alt="Active" width={20} height={20} />
+              </div>
+            </div>
+            <div className="stat-number">{loading ? "-" : stats?.activeCampaigns || 0}</div>
+            <div className="stat-trend text-gray-400">Currently running</div>
           </div>
 
           <div className="stat-card">

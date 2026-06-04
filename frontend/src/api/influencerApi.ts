@@ -71,7 +71,7 @@ export const influencerApi = {
 
   updateMyProfile: async (
     updates: Partial<Omit<InfluencerProfile, "_id" | "user" | "trustScore" | "totalFollowers" | "avgEngagementRate" | "systemCategory">>
-  ): Promise<InfluencerProfile> => {
+  ): Promise<InfluencerProfile & { youtubeSynced?: boolean }> => {
     const { data } = await api.put("/influencers/profile", updates);
     return data.data;
   },

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { getInfluencerDashboardStats, type InfluencerDashboardStats } from "../../api/dashboardApi";
 import { Link } from "react-router-dom";
+import { useLiveRefresh } from "../../hooks/useLiveRefresh";
 
 function InfluencerDashboard() {
   const { user } = useAuth();
@@ -9,21 +10,27 @@ function InfluencerDashboard() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoadError("");
-        const data = await getInfluencerDashboardStats();
-        setStats(data);
-      } catch (err) {
-        console.error("Failed to load dashboard stats", err);
-        setLoadError(err instanceof Error ? err.message : "Failed to load analytics");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
+  const isFirstLoad = useRef(true);
+
+  const fetchStats = useCallback(async () => {
+    if (isFirstLoad.current) setLoading(true);
+    try {
+      setLoadError("");
+      const data = await getInfluencerDashboardStats();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to load dashboard stats", err);
+      setLoadError(err instanceof Error ? err.message : "Failed to load analytics");
+    } finally {
+      setLoading(false);
+      isFirstLoad.current = false;
+    }
   }, []);
+
+  useLiveRefresh(fetchStats, {
+    intervalMs: 8_000,
+    events: ["outreach_handled", "dashboard_refresh", "messages_updated"],
+  });
 
   const analytics = stats?.profileAnalytics;
   const breakdown = analytics?.trustScoreBreakdown ?? {

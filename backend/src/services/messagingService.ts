@@ -4,6 +4,7 @@ import { ICampaign } from "../models/Campaign";
 import { IOutreach } from "../models/Outreach";
 import { IUser } from "../models/User";
 import { generateAssistantWelcome } from "./campaignAssistantService";
+import { scheduleInterestCheck } from "./campaignInterestService";
 
 export async function findOrCreateCampaignConversation(params: {
   businessId: mongoose.Types.ObjectId;
@@ -82,6 +83,7 @@ export async function bootstrapPlatformCampaignMessaging(params: {
     convo.unreadCount.set(influencerKey, prev + 2);
     convo.lastMessage = welcome.slice(0, 120);
     convo.lastMessageAt = new Date();
+    scheduleInterestCheck(convo);
     await convo.save();
   }
 

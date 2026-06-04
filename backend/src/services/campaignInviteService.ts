@@ -13,6 +13,7 @@ import {
 import { isEmailConfigured } from "./emailService";
 import { ICampaign } from "../models/Campaign";
 import { bootstrapPlatformCampaignMessaging } from "./messagingService";
+import { Notification } from "../models/Notification";
 
 export type InviteChannel = "platform" | "email";
 
@@ -142,6 +143,25 @@ export async function inviteInfluencerToCampaign(params: {
       business: business!,
       influencer,
     });
+
+    const existingAlert = await Notification.findOne({
+      user: influencer._id,
+      type: "campaign_invite",
+      outreach: outreach._id,
+    });
+    if (!existingAlert) {
+      await Notification.create({
+        user: influencer._id,
+        type: "campaign_invite",
+        title: "New campaign invitation",
+        body: `${businessName} invited you to "${campaign.title}". Review the request and chat with the Mashhoor assistant.`,
+        campaign: campaign._id,
+        influencer: influencer._id,
+        outreach: outreach._id,
+        isRead: false,
+      });
+    }
+
     return {
       channel: "platform",
       campaign,

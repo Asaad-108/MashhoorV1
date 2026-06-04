@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useLiveRefresh } from "../../hooks/useLiveRefresh";
 import { Link } from "react-router-dom";
 import RequestCard from "../../components/RequestCard";
 import { outreachApi } from "../../api";
@@ -8,25 +9,28 @@ function Requests() {
   const [requests, setRequests] = useState<Outreach[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const data = await outreachApi.getMyRequests();
-        setRequests(data);
-      } catch (err) {
-        console.error("Failed to load requests", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRequests();
+  const fetchRequests = useCallback(async () => {
+    try {
+      const data = await outreachApi.getMyRequests();
+      setRequests(data);
+    } catch (err) {
+      console.error("Failed to load requests", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useLiveRefresh(fetchRequests, {
+    intervalMs: 10_000,
+    events: ["outreach_handled", "dashboard_refresh"],
+  });
 
   const handleAccept = async (id: string) => {
     try {
       await outreachApi.reply(id, "I am interested!", true);
       setRequests((prev) => prev.filter((r) => r._id !== id));
       window.dispatchEvent(new Event("outreach_handled"));
+      window.dispatchEvent(new Event("dashboard_refresh"));
       // Optionally show a success toast here
     } catch (err) {
       console.error("Failed to accept request", err);
@@ -39,6 +43,7 @@ function Requests() {
       await outreachApi.reply(id, "Not interested at this time.", false);
       setRequests((prev) => prev.filter((r) => r._id !== id));
       window.dispatchEvent(new Event("outreach_handled"));
+      window.dispatchEvent(new Event("dashboard_refresh"));
       // Optionally show a success toast here
     } catch (err) {
       console.error("Failed to decline request", err);

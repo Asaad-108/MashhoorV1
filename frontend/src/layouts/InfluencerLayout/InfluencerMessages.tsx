@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { messageApi, type Conversation, type Message } from "../../api/outreachApi";
+import { mergeMessagesById } from "../../utils/messageMerge";
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -18,7 +19,13 @@ function formatRelative(iso?: string) {
 }
 
 function isFromMe(msg: Message, userId: string) {
+  if (msg.messageType === "direct") return msg.sender?._id === userId;
   return msg.messageType === "assistant_query" || msg.sender?._id === userId;
+}
+
+function conversationInDirectChat(convo?: Conversation, msgs?: Message[]) {
+  if (convo?.directChatActive) return true;
+  return !!msgs?.some((m) => m.messageType === "interest_handoff");
 }
 
 function InfluencerMessages() {
@@ -38,33 +45,43 @@ function InfluencerMessages() {
       setLoading(true);
       const data = await messageApi.getConversations();
       setConversations(data);
-      if (data.length > 0 && !activeId) setActiveId(data[0]._id);
+      setActiveId((current) => current ?? (data.length > 0 ? data[0]._id : null));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load conversations");
     } finally {
       setLoading(false);
     }
-  }, [activeId]);
+  }, []);
 
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
+  const refreshMessages = useCallback(async (conversationId: string, showLoader = false) => {
+    if (showLoader) setLoadingMsgs(true);
+    try {
+      const data = await messageApi.getMessages(conversationId);
+      setMessages((prev) => mergeMessagesById(prev, data));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (showLoader) setLoadingMsgs(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!activeId) return;
-    const load = async () => {
-      setLoadingMsgs(true);
-      try {
-        const data = await messageApi.getMessages(activeId);
-        setMessages(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingMsgs(false);
-      }
-    };
-    load();
-  }, [activeId]);
+    refreshMessages(activeId, true);
+  }, [activeId, refreshMessages]);
+
+  useEffect(() => {
+    if (!activeId) return;
+    const interval = setInterval(() => {
+      refreshMessages(activeId);
+      messageApi.getConversations().then(setConversations).catch(console.error);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeId, refreshMessages]);
 
   const activeConvo = conversations.find((c) => c._id === activeId);
   const otherParticipant = activeConvo?.participants.find((p) => p._id !== user?._id);
@@ -72,6 +89,11 @@ function InfluencerMessages() {
     typeof activeConvo?.campaign === "object" && activeConvo?.campaign
       ? activeConvo.campaign.title
       : "Campaign";
+  const campaignId =
+    typeof activeConvo?.campaign === "object" && activeConvo?.campaign
+      ? activeConvo.campaign._id
+      : undefined;
+  const directChat = conversationInDirectChat(activeConvo, messages);
 
   const filtered = conversations.filter((c) => {
     const name = c.participants.find((p) => p._id !== user?._id)?.name ?? "";
@@ -83,26 +105,55 @@ function InfluencerMessages() {
 
   const handleSend = async () => {
     if (!newMessage.trim() || !activeId || sending) return;
+    if (directChat && !otherParticipant?._id) {
+      setError("Cannot send — brand contact missing.");
+      return;
+    }
+
     setSending(true);
     setError("");
     try {
-      const { userMessage, assistantMessage } = await messageApi.askAssistant(
-        activeId,
-        newMessage.trim()
-      );
-      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      if (directChat && otherParticipant?._id) {
+        const msg = await messageApi.send(
+          otherParticipant._id,
+          newMessage.trim(),
+          campaignId
+        );
+        setMessages((prev) => mergeMessagesById(prev, [msg]));
+        setConversations((prev) =>
+          prev.map((c) =>
+            c._id === activeId
+              ? {
+                  ...c,
+                  directChatActive: true,
+                  lastMessage: msg.content.slice(0, 80),
+                  lastMessageAt: msg.createdAt,
+                }
+              : c
+          )
+        );
+      } else {
+        const { userMessage, assistantMessage } = await messageApi.askAssistant(
+          activeId,
+          newMessage.trim()
+        );
+        const nowDirect = assistantMessage.messageType === "interest_handoff";
+        setMessages((prev) => mergeMessagesById(prev, [userMessage, assistantMessage]));
+        setConversations((prev) =>
+          prev.map((c) =>
+            c._id === activeId
+              ? {
+                  ...c,
+                  directChatActive: nowDirect || c.directChatActive,
+                  lastMessage: assistantMessage.content.slice(0, 80),
+                  lastMessageAt: assistantMessage.createdAt,
+                }
+              : c
+          )
+        );
+      }
+      window.dispatchEvent(new Event("messages_updated"));
       setNewMessage("");
-      setConversations((prev) =>
-        prev.map((c) =>
-          c._id === activeId
-            ? {
-                ...c,
-                lastMessage: assistantMessage.content.slice(0, 80),
-                lastMessageAt: assistantMessage.createdAt,
-              }
-            : c
-        )
-      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
@@ -213,8 +264,14 @@ function InfluencerMessages() {
                 <h3 className="font-bold text-gray-900">{otherParticipant?.name}</h3>
                 <p className="text-sm text-purple-600">{campaignTitle}</p>
                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full" />
-                  Mashhoor campaign assistant active
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      directChat ? "bg-green-500" : "bg-purple-500"
+                    }`}
+                  />
+                  {directChat
+                    ? `Direct chat with ${otherParticipant?.name || "the brand"}`
+                    : "Mashhoor campaign assistant active"}
                 </p>
               </div>
 
@@ -226,11 +283,15 @@ function InfluencerMessages() {
                     const mine = user?._id ? isFromMe(msg, user._id) : false;
                     const label =
                       msg.displayName ||
-                      (msg.messageType === "assistant_reply"
+                      (msg.messageType === "assistant_reply" ||
+                      msg.messageType === "interest_prompt" ||
+                      msg.messageType === "interest_handoff"
                         ? "Mashhoor Assistant"
                         : msg.messageType === "outreach"
                           ? "Invitation"
-                          : msg.sender?.name);
+                          : msg.messageType === "direct"
+                            ? msg.sender?.name || otherParticipant?.name
+                            : msg.sender?.name);
                     return (
                       <div
                         key={msg._id}
@@ -265,7 +326,9 @@ function InfluencerMessages() {
 
               <div className="p-4 border-t border-gray-100">
                 <p className="text-xs text-gray-500 mb-2">
-                  Ask about budget, dates, location, niche, or deliverables — the assistant only answers campaign-related questions.
+                  {directChat
+                    ? "You are chatting directly with the brand. The Mashhoor assistant will not reply in this thread."
+                    : "Ask about budget, dates, location, niche, or deliverables — the assistant only answers campaign-related questions."}
                 </p>
                 <div className="flex gap-3 items-center bg-gray-50 p-2 rounded-xl border border-gray-200">
                   <input
@@ -273,7 +336,11 @@ function InfluencerMessages() {
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                    placeholder="Ask about this campaign..."
+                    placeholder={
+                      directChat
+                        ? `Message ${otherParticipant?.name || "the brand"}...`
+                        : "Ask about this campaign..."
+                    }
                     disabled={sending}
                     className="flex-1 bg-transparent outline-none text-gray-900 text-sm"
                   />

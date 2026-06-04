@@ -6,6 +6,8 @@ import { Outreach } from "../models/Outreach";
 import { InfluencerProfile, IInfluencerProfile } from "../models/InfluencerProfile";
 import { AppError } from "../middleware/errorHandler";
 import { calculateTrustScore } from "../services/trustScoreService";
+import { syncYouTubeForProfile } from "../services/youtubeSyncService";
+import { Notification } from "../models/Notification";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -21,55 +23,15 @@ const toBusinessId = (userId: string) => new mongoose.Types.ObjectId(userId);
 const toTimestamp = (value: Date | string | undefined) =>
   value ? new Date(value).getTime() : 0;
 
-/** Refresh YouTube stats for seeded demo accounts (@youtube.test emails). */
-async function syncYouTubeStatsIfSeeded(profile: IInfluencerProfile): Promise<void> {
+/** Refresh YouTube stats when a handle is set or account is a seeded @youtube.test profile. */
+async function refreshYouTubeAnalytics(profile: IInfluencerProfile): Promise<void> {
   const user = profile.user as { email?: string } | undefined;
-  if (!user?.email?.endsWith("@youtube.test")) return;
-
-  const channelId = user.email.split("@")[0];
-  const API_KEY = process.env.YOUTUBE_API_KEY;
-  if (!API_KEY) return;
+  const hasHandle = !!profile.platforms?.youtube?.handle?.trim();
+  const isSeeded = user?.email?.endsWith("@youtube.test");
+  if (!hasHandle && !isSeeded) return;
 
   try {
-    let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${API_KEY}`;
-    let statsRes = await fetch(statsURL);
-    let statsData = (await statsRes.json()) as { items?: Array<{ statistics: Record<string, string>; snippet: { title: string; description?: string } }> };
-    let channelData = statsData.items?.[0];
-
-    if (!channelData && profile.platforms?.youtube?.handle) {
-      const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(profile.platforms.youtube.handle)}&maxResults=1&key=${API_KEY}`;
-      const searchRes = await fetch(searchURL);
-      const searchData = (await searchRes.json()) as { items?: Array<{ snippet: { channelId: string } }> };
-      const realChannelId = searchData.items?.[0]?.snippet.channelId;
-      if (realChannelId) {
-        statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${realChannelId}&key=${API_KEY}`;
-        statsRes = await fetch(statsURL);
-        statsData = (await statsRes.json()) as typeof statsData;
-        channelData = statsData.items?.[0];
-      }
-    }
-
-    if (!channelData) return;
-
-    const subs = parseInt(channelData.statistics.subscriberCount || "0", 10);
-    const views = parseInt(channelData.statistics.viewCount || "0", 10);
-    const videoCount = parseInt(channelData.statistics.videoCount || "0", 10);
-    const avgViews = Math.floor(views / (videoCount || 1)) || 0;
-    const engagementRate = Math.min(100, Number(((avgViews / (subs || 1)) * 100).toFixed(2)));
-
-    if (!profile.platforms.youtube) {
-      profile.platforms.youtube = { handle: "", subscribers: 0, avgViews: 0, engagementRate: 0 };
-    }
-    profile.platforms.youtube.subscribers = subs;
-    profile.platforms.youtube.avgViews = avgViews;
-    profile.platforms.youtube.engagementRate = engagementRate;
-    profile.platforms.youtube.handle = channelData.snippet.title;
-    profile.totalFollowers = subs;
-    profile.avgEngagementRate = engagementRate;
-    if (channelData.snippet.description) {
-      profile.bio = channelData.snippet.description.substring(0, 490);
-    }
-    await profile.save();
+    await syncYouTubeForProfile(profile, user?.email);
   } catch (err) {
     console.error("Dashboard YouTube sync failed:", err);
   }
@@ -83,6 +45,7 @@ export const getInfluencerDashboardStats = async (
   try {
     const userId = req.user?.userId;
     if (!userId) return next(new AppError("User ID missing", 400));
+    const influencerId = new mongoose.Types.ObjectId(userId);
 
     let profile = await InfluencerProfile.findOne({ user: userId }).populate("user", "name email avatar");
 
@@ -98,7 +61,7 @@ export const getInfluencerDashboardStats = async (
       await profile.populate("user", "name email avatar");
     }
 
-    await syncYouTubeStatsIfSeeded(profile);
+    await refreshYouTubeAnalytics(profile);
 
     const { score, breakdown } = await calculateTrustScore(profile);
     profile.trustScore = score;
@@ -108,26 +71,46 @@ export const getInfluencerDashboardStats = async (
     const last6Months = getLast6Months();
     const earningsByMonth = last6Months.map((m) => ({ month: m.month, amount: 0 }));
 
-    // Active campaigns (where influencer is selected and campaign is active)
+    const acceptedOutreachCount = await Outreach.countDocuments({
+      influencer: influencerId,
+      status: "accepted",
+    });
+
     const activeCampaignsCount = await Campaign.countDocuments({
-      selectedInfluencers: userId,
-      status: "active",
+      selectedInfluencers: influencerId,
+      status: { $in: ["active", "draft", "paused"] },
     });
 
-    // Pending requests (outreach directed to this influencer)
+    const activeCampaigns = Math.max(acceptedOutreachCount, activeCampaignsCount);
+
     const pendingRequestsCount = await Outreach.countDocuments({
-      influencer: userId,
-      status: { $in: ["pending", "sent"] },
+      influencer: influencerId,
+      status: { $in: ["pending", "sent", "opened"] },
     });
 
-    // Recent active campaigns for the list
-    const recentCampaigns = await Campaign.find({
-      selectedInfluencers: userId,
-      status: { $in: ["active", "completed"] },
+    const acceptedOutreaches = await Outreach.find({
+      influencer: influencerId,
+      status: "accepted",
     })
-      .sort({ createdAt: -1 })
-      .limit(3)
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .populate("campaign")
       .populate("business", "name");
+
+    const recentCampaigns = acceptedOutreaches
+      .map((o) => {
+        const camp = o.campaign as { title?: string; toObject?: () => Record<string, unknown> } | null;
+        if (!camp || !("title" in camp)) return null;
+        const base = typeof camp.toObject === "function" ? camp.toObject() : { ...camp };
+        return {
+          ...base,
+          business: o.business,
+          outreachId: o._id,
+          acceptedAt: o.repliedAt ?? o.updatedAt,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .slice(0, 3);
 
     // Total earnings (simplified: 0 for now until payment model is built)
     const totalEarnings = 0;
@@ -136,7 +119,7 @@ export const getInfluencerDashboardStats = async (
       success: true,
       data: {
         totalEarnings,
-        activeCampaigns: activeCampaignsCount,
+        activeCampaigns,
         pendingRequests: pendingRequestsCount,
         trustScore: profile.trustScore,
         recentCampaigns,
@@ -171,8 +154,11 @@ export const getBusinessDashboardStats = async (
 
     const businessId = toBusinessId(userId);
 
-    // Total campaigns
     const totalCampaigns = await Campaign.countDocuments({ business: businessId });
+    const activeCampaigns = await Campaign.countDocuments({
+      business: businessId,
+      status: "active",
+    });
 
     // Influencers contacted
     const influencersContacted = await Outreach.countDocuments({ business: businessId });
@@ -197,7 +183,14 @@ export const getBusinessDashboardStats = async (
       .limit(4)
       .populate("influencer", "name");
 
-    // Format recent activity
+    const alertNotifications = await Notification.find({
+      user: businessId,
+      isRead: false,
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("influencer", "name");
+
     const recentActivity = [
       ...recentCampaigns.map(c => ({
         id: c._id,
@@ -205,31 +198,41 @@ export const getBusinessDashboardStats = async (
         text: `Campaign '${c.title}' created`,
         date: c.createdAt,
       })),
-      ...recentOutreaches.map((o: any) => {
-        let text = `Contacted @${o.influencer?.name || "influencer"} for collaboration`;
+      ...recentOutreaches.map((o) => {
+        const inf = o.influencer as { name?: string } | undefined;
+        let text = `Contacted @${inf?.name || "influencer"} for collaboration`;
         let type = "contact";
-        
+
         if (o.status === "accepted") {
-          text = `@${o.influencer?.name || "influencer"} accepted your campaign request!`;
+          text = `@${inf?.name || "influencer"} accepted your campaign request!`;
           type = "Approvals";
         } else if (o.status === "rejected") {
-          text = `@${o.influencer?.name || "influencer"} declined your request.`;
+          text = `@${inf?.name || "influencer"} declined your request.`;
           type = "Messages";
         } else if (o.status === "replied") {
-          text = `New message from @${o.influencer?.name || "influencer"}`;
+          text = `New message from @${inf?.name || "influencer"}`;
           type = "Messages";
         }
 
         return {
-          id: o._id.toString() + o.status, // unique id based on status change
+          id: String(o._id) + o.status,
           type,
           text,
           date: o.updatedAt,
         };
-      })
+      }),
+      ...alertNotifications.map((n) => ({
+        id: n._id.toString(),
+        type:
+          n.type === "outreach_accepted" || n.type === "influencer_interested"
+            ? "Approvals"
+            : "Messages",
+        text: n.body,
+        date: n.createdAt,
+      })),
     ]
       .sort((a, b) => toTimestamp(b.date) - toTimestamp(a.date))
-      .slice(0, 5);
+      .slice(0, 8);
 
     // ─── Real-Time Charts Data Aggregation ───
     const last6Months = Array.from({ length: 6 }).map((_, i) => {
@@ -315,6 +318,7 @@ export const getBusinessDashboardStats = async (
       success: true,
       data: {
         totalCampaigns,
+        activeCampaigns,
         influencersContacted,
         shortlisted,
         avgEngagement,

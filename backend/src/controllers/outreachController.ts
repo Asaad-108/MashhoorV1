@@ -1,7 +1,12 @@
 import { Response, NextFunction } from "express";
 import { Outreach } from "../models/Outreach";
 import { AppError } from "../middleware/errorHandler";
-import { AuthRequest, SentimentLabel } from "../types";
+import { AuthRequest } from "../types";
+import { analyzeSentiment } from "../utils/sentimentAnalysis";
+import { addInfluencerToCampaign } from "../utils/campaignHelpers";
+import { Notification } from "../models/Notification";
+import { User } from "../models/User";
+import { enableDirectChatForCampaignParticipants } from "../services/directChatService";
 import { Campaign } from "../models/Campaign";
 import { inviteInfluencerToCampaign } from "../services/campaignInviteService";
 
@@ -107,23 +112,44 @@ export const replyToOutreach = async (
     outreach.status = accept === true ? "accepted" : accept === false ? "rejected" : "replied";
     outreach.repliedAt = new Date();
 
-    const sentiment = mockSentimentAnalysis(reply);
+    const sentiment = analyzeSentiment(reply);
     outreach.sentiment = { ...sentiment, analyzedAt: new Date() };
 
     await outreach.save();
 
     if (accept === true) {
       const campaign = await Campaign.findById(outreach.campaign);
-      if (campaign && !campaign.selectedInfluencers.includes(outreach.influencer)) {
-        campaign.selectedInfluencers.push(outreach.influencer);
+      if (campaign) {
+        campaign.selectedInfluencers = addInfluencerToCampaign(
+          campaign.selectedInfluencers,
+          outreach.influencer
+        );
         if (campaign.status === "draft") {
           campaign.status = "active";
         }
         await campaign.save();
+
+        const influencer = await User.findById(outreach.influencer).select("name");
+        await Notification.create({
+          user: outreach.business,
+          type: "outreach_accepted",
+          title: "Influencer accepted your campaign",
+          body: `${influencer?.name || "An influencer"} accepted "${campaign.title}". Open Messages to coordinate next steps.`,
+          campaign: campaign._id,
+          influencer: outreach.influencer,
+          outreach: outreach._id,
+          isRead: false,
+        });
+
+        await enableDirectChatForCampaignParticipants({
+          businessId: outreach.business,
+          influencerId: outreach.influencer,
+          campaignId: campaign._id,
+        });
       }
     } else if (accept === false) {
       const campaign = await Campaign.findById(outreach.campaign);
-      if (campaign && campaign.selectedInfluencers.includes(outreach.influencer)) {
+      if (campaign) {
         campaign.selectedInfluencers = campaign.selectedInfluencers.filter(
           (id) => id.toString() !== outreach.influencer.toString()
         );
@@ -131,7 +157,12 @@ export const replyToOutreach = async (
       }
     }
 
-    res.status(200).json({ success: true, message: "Reply submitted", data: outreach });
+    const populated = await Outreach.findById(outreach._id)
+      .populate("campaign", "title description budget timeline requirements")
+      .populate("business", "name email avatar")
+      .populate("influencer", "name email avatar");
+
+    res.status(200).json({ success: true, message: "Reply submitted", data: populated ?? outreach });
   } catch (err) {
     next(err);
   }
@@ -159,16 +190,3 @@ export const updateOutreachStatus = async (
     next(err);
   }
 };
-
-function mockSentimentAnalysis(text: string): { label: SentimentLabel; score: number } {
-  const lower = text.toLowerCase();
-  const positiveWords = ["great", "happy", "love", "interested", "yes", "absolutely", "excited", "sure"];
-  const negativeWords = ["no", "not", "busy", "decline", "reject", "pass", "sorry", "unfortunately"];
-
-  const posCount = positiveWords.filter((w) => lower.includes(w)).length;
-  const negCount = negativeWords.filter((w) => lower.includes(w)).length;
-
-  if (posCount > negCount) return { label: "positive", score: 0.7 + posCount * 0.05 };
-  if (negCount > posCount) return { label: "negative", score: 0.7 + negCount * 0.05 };
-  return { label: "neutral", score: 0.5 };
-}

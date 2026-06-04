@@ -39,6 +39,7 @@ export type DashboardCampaign = {
 
 export type BusinessDashboardStats = {
   totalCampaigns: number;
+  activeCampaigns: number;
   influencersContacted: number;
   shortlisted: number;
   avgEngagement: string;
@@ -81,6 +82,7 @@ export const getBusinessDashboardStats = async (): Promise<BusinessDashboardStat
   const stats = data?.data ?? {};
   return {
     totalCampaigns: stats.totalCampaigns ?? 0,
+    activeCampaigns: stats.activeCampaigns ?? 0,
     influencersContacted: stats.influencersContacted ?? 0,
     shortlisted: stats.shortlisted ?? 0,
     avgEngagement: stats.avgEngagement ?? "0.0%",

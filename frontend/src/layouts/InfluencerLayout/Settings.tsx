@@ -52,11 +52,11 @@ function Settings() {
     setError("");
     try {
       const existing = await influencerApi.getById(user!._id);
-      await influencerApi.updateMyProfile({
+      const updated = await influencerApi.updateMyProfile({
         bio,
         niche: niche ? [niche] : ["Fashion"],
         location: region,
-        country: region,
+        country: region || "Pakistan",
         platforms: {
           instagram: {
             handle: instagram,
@@ -71,7 +71,18 @@ function Settings() {
           },
         } as any,
       });
-      setMessage("Profile updated successfully!");
+      const profileData = await influencerApi.getById(user!._id);
+      setBio(profileData.bio || "");
+      setNiche(profileData.niche?.[0] || "");
+      setRegion(profileData.location || profileData.country || "");
+      setYoutube(profileData.platforms?.youtube?.handle || youtube);
+      setMessage(
+        updated.youtubeSynced
+          ? `Profile updated. YouTube: ${profileData.platforms?.youtube?.subscribers?.toLocaleString() ?? 0} subscribers, trust score ${profileData.trustScore ?? 0}/100.`
+          : youtube.trim()
+            ? "Profile saved. If YouTube stats are empty, add YOUTUBE_API_KEY on the server or check your channel handle."
+            : "Profile updated successfully!"
+      );
     } catch (err) {
       console.error(err);
       setError("Failed to update profile.");

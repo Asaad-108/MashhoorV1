@@ -9,7 +9,7 @@ const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Te
 function FindInfluencers() {
   const [search, setSearch] = useState("");
   const [niche, setNiche] = useState("");
-  const [country, setCountry] = useState("Pakistan");
+  const [country, setCountry] = useState("");
   const [minTrustScore, setMinTrustScore] = useState("");
   const [minFollowers, setMinFollowers] = useState(0);
   const [sort, setSort] = useState<"trustScore" | "followers" | "engagement" | "newest">("newest");
@@ -84,7 +84,7 @@ function FindInfluencers() {
     }
   };
 
-  const { influencers, loading, error, pagination, setFilters, setPage } = useInfluencers({ sort: "newest", country: "Pakistan" });
+  const { influencers, loading, error, pagination, setFilters, setPage } = useInfluencers({ sort: "newest" });
 
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [isRecommendedMode, setIsRecommendedMode] = useState(false);
@@ -150,12 +150,12 @@ function FindInfluencers() {
   const resetFilters = () => {
     setSearch("");
     setNiche("");
-    setCountry("Pakistan");
+    setCountry("");
     setMinTrustScore("");
     setMinFollowers(0);
     setSort("newest");
     setIsRecommendedMode(false);
-    setFilters({ sort: "newest", country: "Pakistan" });
+    setFilters({ sort: "newest" });
   };
 
   const displayedInfluencers = isRecommendedMode ? recommendedInfluencers : influencers;

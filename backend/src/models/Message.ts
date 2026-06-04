@@ -4,7 +4,9 @@ export type MessageType =
   | "direct"
   | "outreach"
   | "assistant_query"
-  | "assistant_reply";
+  | "assistant_reply"
+  | "interest_prompt"
+  | "interest_handoff";
 
 export interface IMessage extends Document {
   sender?: mongoose.Types.ObjectId;
@@ -26,6 +28,14 @@ export interface IConversation extends Document {
   lastMessage?: string;
   lastMessageAt?: Date;
   unreadCount: Map<string, number>;
+  /** Increments when influencer asks another campaign question after an interest prompt. */
+  interestCycle?: number;
+  interestPromptSentInCycle?: boolean;
+  interestCheckAt?: Date;
+  lastCampaignChatAt?: Date;
+  businessNotifiedInterested?: boolean;
+  /** After interest handoff — only direct messages between brand and influencer. */
+  directChatActive?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,7 +49,14 @@ const MessageSchema = new Schema<IMessage>(
     content: { type: String, required: true, maxlength: 4000 },
     messageType: {
       type: String,
-      enum: ["direct", "outreach", "assistant_query", "assistant_reply"],
+      enum: [
+        "direct",
+        "outreach",
+        "assistant_query",
+        "assistant_reply",
+        "interest_prompt",
+        "interest_handoff",
+      ],
       default: "direct",
     },
     assistantTrace: String,
@@ -60,6 +77,12 @@ const ConversationSchema = new Schema<IConversation>(
     lastMessage: String,
     lastMessageAt: Date,
     unreadCount: { type: Map, of: Number, default: {} },
+    interestCycle: { type: Number, default: 0 },
+    interestPromptSentInCycle: { type: Boolean, default: false },
+    interestCheckAt: Date,
+    lastCampaignChatAt: Date,
+    businessNotifiedInterested: { type: Boolean, default: false },
+    directChatActive: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
