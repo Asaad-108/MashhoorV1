@@ -18,7 +18,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173",
   process.env.CLIENT_URL,
-  "https://your-vercel-app.vercel.app"
+  "https://mashhoor-frontend.vercel.app/"
 ].filter(Boolean) as string[];
 
 // ─── Security ────────────────────────────────────────────────────────────────
