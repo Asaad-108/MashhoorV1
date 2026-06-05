@@ -15,12 +15,17 @@ import notificationRoutes from "./routes/notifications";
 import { errorHandler, notFound } from "./middleware/errorHandler";
 
 const app = express();
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL,
+  "https://your-vercel-app.vercel.app"
+].filter(Boolean) as string[];
 
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: allowedOrigins,
     credentials: true,
   })
 );
@@ -58,7 +63,12 @@ app.get("/api/health", (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
-
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Mashhoor Backend API is live 🚀",
+  });
+});
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/influencers", influencerRoutes);
