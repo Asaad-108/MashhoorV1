@@ -70,7 +70,8 @@ app.get("/", (_req, res) => {
   });
 });
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authLimiter);
+app.use("/api/auth", authRoutes);
 app.use("/api/influencers", influencerRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/outreach", outreachRoutes);
