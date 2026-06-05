@@ -17,6 +17,9 @@ import { errorHandler, notFound } from "./middleware/errorHandler";
 
 const app = express();
 
+// Trust the first proxy (Render load balancer) to fix express-rate-limit IP issues
+app.set('trust proxy', 1);
+
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({
