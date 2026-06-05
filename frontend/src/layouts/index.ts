@@ -14,8 +14,9 @@ import SignUp from "./AuthLayout/Signup";
 import Reset from "./AuthLayout/Reset";
 import ResetPassword from "./AuthLayout/ResetPassword";
 import AuthLayout from "./AuthLayout/AuthLayout";
+import AdminLogin from "./AuthLayout/AdminLogin";
 
-export { Login, SignUp, Reset, ResetPassword, AuthLayout };
+export { Login, SignUp, Reset, ResetPassword, AuthLayout, AdminLogin };
 
 // Influencer Layout Components
 import InfluencerLayout from "./InfluencerLayout/InfluencerLayout";
@@ -50,6 +51,7 @@ import EditCampaign from "./BusinessLayout/EditCampaign";
 import AdminLayout from "./AdminLayout/AdminLayout";
 import AdminDashboard from "./AdminLayout/AdminDashboard";
 import ReportedUsers from "./AdminLayout/ReportedUsers";
+import VerificationDashboard from "./AdminLayout/VerificationDashboard";
 
 export {
   BusinessLayout,
@@ -66,4 +68,5 @@ export {
   AdminLayout,
   AdminDashboard,
   ReportedUsers,
+  VerificationDashboard,
 };

@@ -21,34 +21,24 @@ type ChannelStats = {
 };
 
 async function fetchChannelStats(handle: string, apiKey: string): Promise<ChannelStats | null> {
-  const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(handle)}&key=${apiKey}`;
-  const searchRes = await fetch(searchURL);
-  const searchData = (await searchRes.json()) as {
-    items?: Array<{ snippet: { channelId: string } }>;
-    error?: { message: string };
-  };
+  // Use forHandle or forUsername which costs 1 quota instead of search which costs 100.
+  const handleWithAt = handle.startsWith("@") ? handle : `@${handle}`;
+  let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&forHandle=${encodeURIComponent(handleWithAt)}&key=${apiKey}`;
+  let statsRes = await fetch(statsURL);
+  let statsData = (await statsRes.json()) as any;
 
-  if (searchData.error) {
-    console.error("YouTube search API error:", searchData.error.message);
-    return null;
+  if (statsData.error || !statsData.items || statsData.items.length === 0) {
+    // Fallback to forUsername if forHandle didn't work
+    statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&forUsername=${encodeURIComponent(handle)}&key=${apiKey}`;
+    statsRes = await fetch(statsURL);
+    statsData = await statsRes.json();
   }
 
-  const channelId = searchData.items?.[0]?.snippet.channelId;
-  if (!channelId) return null;
-
-  const statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${apiKey}`;
-  const statsRes = await fetch(statsURL);
-  const statsData = (await statsRes.json()) as {
-    items?: Array<{
-      statistics: Record<string, string>;
-      snippet: { title: string; description?: string };
-      contentDetails?: { relatedPlaylists?: { uploads?: string } };
-    }>;
-    error?: { message: string };
-  };
-
-  if (statsData.error || !statsData.items?.[0]) {
-    console.error("YouTube channel API error:", statsData.error?.message || "no channel");
+  // Search API has been completely removed because it costs 100 quota units
+  // and causes immediate "Quota Exceeded" errors for the entire application.
+  
+  if (statsData.error || !statsData.items || statsData.items.length === 0) {
+    // We do NOT use console.error here to avoid spamming the terminal for missing handles
     return null;
   }
 
@@ -163,7 +153,8 @@ export async function syncYouTubeForProfile(
   profile.platforms.youtube.engagementRate = stats.engagementRate;
   profile.platforms.youtube.videoCount = stats.videoCount;
   profile.platforms.youtube.daysSinceLastUpload = stats.daysSinceLastUpload;
-  profile.platforms.youtube.handle = stats.title || handle || profile.platforms.youtube.handle;
+  // Keep the user's handle as they typed it, don't overwrite it with the channel title!
+  profile.platforms.youtube.handle = handle || profile.platforms.youtube.handle;
 
   profile.totalFollowers = stats.subscribers;
   profile.avgEngagementRate = stats.engagementRate;

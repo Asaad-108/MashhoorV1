@@ -12,6 +12,7 @@ import messageRoutes from "./routes/messages";
 import dashboardRoutes from "./routes/dashboard";
 import adminRoutes from "./routes/admin";
 import notificationRoutes from "./routes/notifications";
+import reportRoutes from "./routes/reports";
 import { errorHandler, notFound } from "./middleware/errorHandler";
 
 const app = express();
@@ -31,7 +32,14 @@ app.use(express.urlencoded({ extended: true }));
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === "development") {
-  app.use(morgan("dev"));
+  app.use(morgan("dev", {
+    skip: (req) => {
+      const url = req.originalUrl || req.url;
+      return url.includes("/notifications/summary") || 
+             url.includes("/dashboard") ||
+             url.includes("/health");
+    }
+  }));
 }
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
@@ -68,9 +76,11 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/reports", reportRoutes);
 
 // ─── 404 + Error Handler (always last) ───────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);
 
 export default app;
+

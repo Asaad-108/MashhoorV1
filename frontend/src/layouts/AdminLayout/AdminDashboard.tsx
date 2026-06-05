@@ -45,13 +45,7 @@ function AdminDashboard() {
       ]
     : [];
 
-  const recentActivity = stats?.recentActivity ?? [
-    { id: 1, type: "user", text: "New influencer registered: Sarah Johnson", time: "10 minutes ago" },
-    { id: 2, type: "campaign", text: "Campaign created: Summer Launch by TechStyle Co.", time: "1 hour ago" },
-    { id: 3, type: "verification", text: "Verification approved for @mayapatel", time: "2 hours ago" },
-    { id: 4, type: "report", text: "Report filed against user @fake_account", time: "3 hours ago" },
-    { id: 5, type: "system", text: "Dataset updated: 150 new influencers added", time: "5 hours ago" },
-  ];
+  const recentActivity = stats?.recentActivity || [];
 
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading admin dashboard...</div>;
@@ -93,43 +87,53 @@ function AdminDashboard() {
       </div>
 
       <div className="flex gap-6 mb-8">
-        {/* User Growth Chart Placeholder */}
+        {/* Real User Growth Chart */}
         <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm flex-1">
           <h2 className="text-lg font-bold text-gray-900 mb-8">User Growth</h2>
-          <div className="h-64 flex items-end justify-between relative pt-10">
-             {/* Simple visual mock for the chart */}
-             <div className="absolute inset-0 border-b border-l border-gray-100 flex flex-col justify-between text-[10px] text-gray-300 pointer-events-none">
-                <span>3200</span><span>2400</span><span>1600</span><span>800</span><span>0</span>
-             </div>
-             <div className="ml-10 w-full h-full flex items-end justify-around pb-4">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mb-[10%] relative"><div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px]">Jan</div></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full mb-[25%] relative"><div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px]">Feb</div></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full mb-[40%] relative"><div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px]">Mar</div></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full mb-[55%] relative"><div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px]">Apr</div></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full mb-[75%] relative"><div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px]">May</div></div>
-                <div className="w-2 h-2 bg-purple-500 rounded-full mb-[90%] relative"><div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px]">Jun</div></div>
-             </div>
-             {/* Line mock */}
-             <svg className="absolute left-10 bottom-4 w-[calc(100%-40px)] h-full overflow-visible pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path d="M0,90 L20,75 L40,60 L60,45 L80,25 L100,10" fill="none" stroke="#8b5cf6" strokeWidth="1" />
-             </svg>
-          </div>
+          {stats?.userGrowth && stats.userGrowth.length > 0 ? (
+            <div className="h-64 flex items-end justify-between relative pt-10">
+               {/* Grid lines */}
+               <div className="absolute inset-0 border-b border-l border-gray-100 flex flex-col justify-between text-[10px] text-gray-300 pointer-events-none">
+                  <span>{Math.max(...stats.userGrowth.map((g: any) => g.count))}</span>
+                  <span>{Math.floor(Math.max(...stats.userGrowth.map((g: any) => g.count)) * 0.75)}</span>
+                  <span>{Math.floor(Math.max(...stats.userGrowth.map((g: any) => g.count)) * 0.5)}</span>
+                  <span>{Math.floor(Math.max(...stats.userGrowth.map((g: any) => g.count)) * 0.25)}</span>
+                  <span>0</span>
+               </div>
+               <div className="ml-10 w-full h-full flex items-end justify-around pb-4">
+                  {stats.userGrowth.map((growth: any, i: number) => {
+                    const max = Math.max(...stats.userGrowth.map((g: any) => g.count)) || 1;
+                    const heightPercent = Math.max((growth.count / max) * 100, 5);
+                    return (
+                      <div key={i} className="w-2 bg-purple-500 rounded-full relative" style={{ height: `${heightPercent}%` }}>
+                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-gray-400 text-[10px] whitespace-nowrap">{growth.month}</div>
+                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-gray-800 text-[10px] font-bold opacity-0 hover:opacity-100 cursor-pointer">{growth.count}</div>
+                      </div>
+                    );
+                  })}
+               </div>
+            </div>
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-400">
+              Not enough data for growth chart
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
         <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm w-1/3">
           <h2 className="text-lg font-bold text-gray-900 mb-6">Quick Actions</h2>
           <div className="space-y-4">
-            <button className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all group">
+            <Link to="/admin/verifications" className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all group">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-gray-400 shadow-sm group-hover:text-purple-600">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                 </div>
                 <span className="font-semibold text-gray-700">Verification Dashboard</span>
               </div>
-            </button>
+            </Link>
 
-            <button className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all group">
+            <Link to="/admin/verifications" className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all group">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-gray-400 shadow-sm group-hover:text-purple-600">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -138,7 +142,7 @@ function AdminDashboard() {
                   Review Pending Verifications ({stats?.pendingVerification ?? 0})
                 </span>
               </div>
-            </button>
+            </Link>
 
             <Link to="/admin/reports" className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-all group">
               <div className="flex items-center gap-3">
@@ -155,25 +159,31 @@ function AdminDashboard() {
       {/* Recent Activity */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10">
         <h2 className="text-xl font-bold text-gray-900 mb-8">Recent Activity</h2>
-        <div className="space-y-6">
-          {recentActivity.map((activity) => (
-            <div key={activity.id} className="flex justify-between items-center pb-6 border-b border-gray-50 last:border-0 last:pb-0">
-              <div>
-                <div className="font-bold text-gray-800 text-lg">{activity.text}</div>
-                <div className="text-gray-400 text-sm">{activity.time}</div>
+        {recentActivity.length > 0 ? (
+          <div className="space-y-6">
+            {recentActivity.map((activity: any) => (
+              <div key={activity.id} className="flex justify-between items-center pb-6 border-b border-gray-50 last:border-0 last:pb-0">
+                <div>
+                  <div className="font-bold text-gray-800 text-lg">{activity.text}</div>
+                  <div className="text-gray-400 text-sm">{activity.time}</div>
+                </div>
+                <span className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize ${
+                  activity.type === 'user' ? 'bg-blue-50 text-blue-500' :
+                  activity.type === 'campaign' ? 'bg-purple-50 text-purple-500' :
+                  activity.type === 'verification' ? 'bg-green-50 text-green-500' :
+                  activity.type === 'report' ? 'bg-red-50 text-red-500' :
+                  'bg-gray-50 text-gray-500'
+                }`}>
+                  {activity.type}
+                </span>
               </div>
-              <span className={`px-4 py-1.5 rounded-full text-xs font-bold capitalize ${
-                activity.type === 'user' ? 'bg-blue-50 text-blue-500' :
-                activity.type === 'campaign' ? 'bg-purple-50 text-purple-500' :
-                activity.type === 'verification' ? 'bg-green-50 text-green-500' :
-                activity.type === 'report' ? 'bg-red-50 text-red-500' :
-                'bg-gray-50 text-gray-500'
-              }`}>
-                {activity.type}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-gray-400 py-8 text-center border border-dashed border-gray-200 rounded-lg">
+            No recent platform activity found.
+          </div>
+        )}
       </div>
     </div>
   );

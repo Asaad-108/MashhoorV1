@@ -31,6 +31,8 @@ import {
   AdminLayout,
   AdminDashboard,
   ReportedUsers,
+  VerificationDashboard,
+  AdminLogin,
 } from "../layouts/index";
 import ScrollToTop from "./ScrollToTop";
 import ProtectedRoute from "./ProtectedRoute";
@@ -61,6 +63,7 @@ export function AppRoutes() {
           <Route path="/signup" element={<SignUp />} />
           <Route path="/reset" element={<Reset />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/Admin-login" element={<AdminLogin />} />
         </Route>
 
         {/* Business Routes — protected */}
@@ -90,6 +93,7 @@ export function AppRoutes() {
         <Route element={<AdminLayout />}>
           <Route path="/admin/dashboard" element={<ProtectedRoute allowedRole="admin"><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute allowedRole="admin"><ReportedUsers /></ProtectedRoute>} />
+          <Route path="/admin/verifications" element={<ProtectedRoute allowedRole="admin"><VerificationDashboard /></ProtectedRoute>} />
         </Route>
 
         {/* Fallback */}

@@ -62,6 +62,28 @@ export const getAdminStats = async (
         time: formatRelativeTime(new Date(item.time)),
       }));
 
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    const userGrowthRaw = await User.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } }
+    ]);
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const userGrowth = userGrowthRaw.map(g => ({
+      month: monthNames[g._id.month - 1],
+      count: g.count
+    }));
+
     res.status(200).json({
       success: true,
       data: {
@@ -73,6 +95,7 @@ export const getAdminStats = async (
         totalOutreach,
         pendingOutreach,
         recentActivity,
+        userGrowth,
       },
     });
   } catch (err) {
@@ -89,3 +112,51 @@ function formatRelativeTime(date: Date): string {
   const days = Math.floor(hours / 24);
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
+
+// GET /api/admin/verifications/pending
+export const getPendingVerifications = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const users = await User.find({ isVerified: false })
+      .select("name email role createdAt avatar")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: users,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /api/admin/verifications/:id/approve
+export const verifyUser = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { isVerified: true },
+      { new: true }
+    );
+
+    if (!user) {
+       res.status(404).json({ success: false, message: "User not found" });
+       return;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "User verified successfully",
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

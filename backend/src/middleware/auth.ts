@@ -29,7 +29,6 @@ export const protect = (
 // Role-based access: authorize("business") or authorize("influencer")
 export const authorize = (...roles: UserRole[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    console.log(`[Auth Middleware] Required roles: ${roles.join(", ")}, User role: ${req.user?.role}, User ID: ${req.user?.userId}`);
     if (!req.user || !roles.includes(req.user.role)) {
       res.status(403).json({
         success: false,

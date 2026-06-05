@@ -6,6 +6,7 @@ import type { Campaign } from "../../api/campaignApi";
 import { isPlaceholderInfluencerEmail, isRegisteredOnPlatform } from "../../api/outreachApi";
 import { influencerApi } from "../../api/influencerApi";
 import type { ROIPredictionResult } from "../../api/influencerApi";
+import { reportApi } from "../../api/reportApi";
 
 interface InfluencerProfile {
   _id: string;
@@ -64,6 +65,13 @@ export default function InfluencerDetails() {
   const [contactEmail, setContactEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [modalError, setModalError] = useState("");
+
+  // Report Modal State
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reporting, setReporting] = useState(false);
+  const [reportError, setReportError] = useState("");
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -126,6 +134,27 @@ export default function InfluencerDetails() {
       setModalError(err instanceof Error ? err.message : "Failed to add to campaign");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleReportUser = async () => {
+    if (!reportReason) return setReportError("Please select a reason");
+    if (!reportDetails) return setReportError("Please provide details");
+    
+    setReporting(true);
+    setReportError("");
+    try {
+      if (profile) {
+        await reportApi.createReport(profile.user._id, reportReason, reportDetails);
+        setShowReportModal(false);
+        setReportReason("");
+        setReportDetails("");
+        alert("Report submitted successfully. Our team will review it shortly.");
+      }
+    } catch (err: unknown) {
+      setReportError(err instanceof Error ? err.message : "Failed to submit report");
+    } finally {
+      setReporting(false);
     }
   };
 
@@ -257,17 +286,26 @@ export default function InfluencerDetails() {
                   ))}
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                  Contact
-                </button>
-                <button 
-                  onClick={() => setShowModal(true)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+              <div className="flex flex-col gap-3 items-end">
+                <div className="flex gap-3">
+                  <button className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Contact
+                  </button>
+                  <button 
+                    onClick={() => setShowModal(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Add to Campaign
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowReportModal(true)}
+                  className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Add to Campaign
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                  Report User
                 </button>
               </div>
             </div>
@@ -544,6 +582,73 @@ export default function InfluencerDetails() {
                 className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {sending ? "Adding..." : "Add to Campaign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fadeIn border-t-4 border-red-500">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-500">
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Report User</h2>
+            </div>
+            
+            <p className="text-sm text-gray-500 mb-4">
+              Please provide details about why you are reporting this influencer. Our trust and safety team will review this report.
+            </p>
+
+            {reportError && (
+              <div className="mb-4 bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-200">
+                {reportError}
+              </div>
+            )}
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
+              <select 
+                value={reportReason}
+                onChange={e => setReportReason(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-red-500 bg-gray-50"
+              >
+                <option value="">-- Select a reason --</option>
+                <option value="Fake Engagement/Followers">Fake Engagement / Followers</option>
+                <option value="Unprofessional Behavior">Unprofessional Behavior</option>
+                <option value="Spam / Scams">Spam / Scams</option>
+                <option value="Inappropriate Content">Inappropriate Content</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Additional Details</label>
+              <textarea 
+                rows={4}
+                value={reportDetails}
+                onChange={e => setReportDetails(e.target.value)}
+                placeholder="Please provide specific details to help us investigate..."
+                className="w-full border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-red-500 bg-gray-50"
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button 
+                onClick={() => setShowReportModal(false)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleReportUser}
+                disabled={reporting}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {reporting ? "Submitting..." : "Submit Report"}
               </button>
             </div>
           </div>

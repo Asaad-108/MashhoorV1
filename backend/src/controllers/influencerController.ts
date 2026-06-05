@@ -128,9 +128,11 @@ export const getInfluencers = async (
           const user = profile.user as any;
           const userEmail = user?.email;
           
-          if (userEmail && userEmail.endsWith("@youtube.test")) {
-            await syncYouTubeForProfile(profile, userEmail);
-          } 
+          // We no longer live-sync YouTube on the list view to save API Quota and improve load speeds.
+          // Data is now purely served from the database cache.
+          // if (userEmail && userEmail.endsWith("@youtube.test")) {
+          //   await syncYouTubeForProfile(profile, userEmail);
+          // } 
           // Note: Instagram sync is deliberately skipped here because Apify actor calls take 15-30s per profile,
           // which would cause the entire Find Influencers screen to freeze for minutes. 
           // Instagram data is populated via the seed script instead.
