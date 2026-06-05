@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
+import { Title } from "../../components";
 
 function AdminLayout() {
   const location = useLocation();
@@ -9,10 +10,7 @@ function AdminLayout() {
       <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-[#8b5cf6] rounded-xl flex items-center justify-center text-white shadow-lg shadow-purple-200">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-            </div>
-            <span className="text-2xl font-black text-gray-900 tracking-tight">Mashhoor Admin</span>
+            <Title />
           </div>
 
           <div className="flex items-center gap-8">
