@@ -15,20 +15,30 @@ import notificationRoutes from "./routes/notifications";
 import { errorHandler, notFound } from "./middleware/errorHandler";
 
 const app = express();
-const allowedOrigins = [
-  "http://localhost:5173",
-  process.env.CLIENT_URL,
-  "https://mashhoor-frontend.vercel.app"
-].filter(Boolean) as string[];
 
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "https://mashhoor-frontend.vercel.app"
+    ];
+
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin) || origin.includes("vercel.app")) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("CORS blocked"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+app.options("*", cors());
 
 // ─── Body Parser (MUST be before routes and rate limiters that read body) ─────
 app.use(express.json({ limit: "10mb" }));
