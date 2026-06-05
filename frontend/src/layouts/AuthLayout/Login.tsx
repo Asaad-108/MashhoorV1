@@ -31,9 +31,7 @@ function Login() {
       navigate(
         selectedRole === "business"
           ? "/business-dashboard"
-          : selectedRole === "admin"
-            ? "/admin/dashboard"
-            : "/influencer-dashboard"
+          : "/influencer-dashboard"
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed. Please try again.");

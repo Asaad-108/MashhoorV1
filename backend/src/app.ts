@@ -19,12 +19,27 @@ const app = express();
 
 // ─── Security ────────────────────────────────────────────────────────────────
 app.use(helmet());
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:5173",
+      "https://mashhoor-frontend.vercel.app"
+    ];
+
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin) || origin.includes("vercel.app")) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("CORS blocked"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+app.options("*", cors());
 
 // ─── Body Parser (MUST be before routes and rate limiters that read body) ─────
 app.use(express.json({ limit: "10mb" }));
@@ -61,14 +76,21 @@ app.use("/api", limiter);
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
-    message: "Mashhoor API is running",
-    environment: process.env.NODE_ENV,
+    status: "ok",
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
     timestamp: new Date().toISOString(),
   });
 });
-
+app.get("/", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Mashhoor Backend API is live 🚀",
+  });
+});
 // ─── Routes ───────────────────────────────────────────────────────────────────
-app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/auth", authLimiter);
+app.use("/api/auth", authRoutes);
 app.use("/api/influencers", influencerRoutes);
 app.use("/api/campaigns", campaignRoutes);
 app.use("/api/outreach", outreachRoutes);

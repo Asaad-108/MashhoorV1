@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Use "/api" in dev so Vite proxies to the backend (see vite.config.ts). Override with VITE_API_URL in production.
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 const isAuthEndpoint = (url?: string) =>
   !!url && (url.includes("/auth/login") || url.includes("/auth/register"));
