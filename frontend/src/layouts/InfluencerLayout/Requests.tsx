@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { useLiveRefresh } from "../../hooks/useLiveRefresh";
-import { Link } from "react-router-dom";
 import RequestCard from "../../components/RequestCard";
 import { outreachApi } from "../../api";
 import type { Outreach } from "../../api/outreachApi";
@@ -94,13 +93,13 @@ function Requests() {
             pendingRequests.map((item) => {
               // Format data for the RequestCard
               const { campaign, business } = item;
-              
+
               // Safely extract requirements
               // @ts-ignore - The campaign object from API might have more fields than typed
               const platforms = campaign.requirements?.platforms || [];
               // @ts-ignore
               const contentType = campaign.requirements?.contentType || [];
-              
+
               return (
                 <RequestCard
                   key={item._id}
