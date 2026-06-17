@@ -142,7 +142,7 @@ export default function InfluencerDetails() {
   const handleReportUser = async () => {
     if (!reportReason) return setReportError("Please select a reason");
     if (!reportDetails) return setReportError("Please provide details");
-    
+
     setReporting(true);
     setReportError("");
     try {
@@ -225,9 +225,9 @@ export default function InfluencerDetails() {
   }
 
   const { user, location, bio, tags, totalFollowers, avgEngagementRate, trustScore, trustScoreBreakdown, niche, platforms } = profile;
-  
+
   const followersStr = totalFollowers >= 1000 ? `${(totalFollowers / 1000).toFixed(0)}K` : String(totalFollowers);
-  
+
   let reachNum = 0;
   if (platforms?.youtube?.avgViews) {
     reachNum = platforms.youtube.avgViews;
@@ -235,20 +235,20 @@ export default function InfluencerDetails() {
     // We compute reach directly from the engagement rate now, as the backend unified the ER formula to (Reach/Followers)*100
     reachNum = Math.round(platforms.instagram.followers * (platforms.instagram.engagementRate / 100));
   }
-  
+
   const avgReach = reachNum >= 1000 ? `${(reachNum / 1000).toFixed(0)}K` : String(reachNum);
 
-  const pastCampaignsCount = (profile as any).pastCampaigns?.length || 0;
-  const responseRate = pastCampaignsCount > 0 ? "98%" : "0%";
+  const pastCampaignsCount = isOnPlatform ? ((profile as any).pastCampaigns?.length || 0) : 0;
+  const responseRate = isOnPlatform && pastCampaignsCount > 0 ? "98%" : "0%";
 
   return (
     <div className="min-h-screen bg-[#f9fafb] p-4 md:p-8 relative">
       {/* Profile Header Card */}
       <div className="bg-white rounded-2xl p-6 md:p-8 border border-gray-200 mb-6 shadow-sm">
         <div className="flex flex-col md:flex-row gap-6 md:items-start">
-          <img 
-            src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=8b5cf6&color=fff`} 
-            alt={user.name} 
+          <img
+            src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=8b5cf6&color=fff`}
+            alt={user.name}
             className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border border-gray-100"
             referrerPolicy="no-referrer"
           />
@@ -258,22 +258,22 @@ export default function InfluencerDetails() {
                 <div className="flex items-center gap-2 mb-1">
                   <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
                   <span className="bg-blue-50 text-blue-600 text-xs font-semibold px-2 py-0.5 rounded flex items-center gap-1">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
                     Verified
                   </span>
                 </div>
                 <p className="text-gray-600 font-medium mb-3">{niche.join(" & ")} Creator</p>
                 <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
                   <span className="flex items-center gap-1">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
                     {location || "Unknown"}
                   </span>
                   <span className="flex items-center gap-1">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
                     {followersStr} followers
                   </span>
                   <span className="flex items-center gap-1">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>
                     {avgEngagementRate.toFixed(1)}% engagement
                   </span>
                 </div>
@@ -291,14 +291,14 @@ export default function InfluencerDetails() {
               <div className="flex flex-col gap-3 items-end">
                 <div className="flex gap-3">
                   <button className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                     Contact
                   </button>
-                  <button 
+                  <button
                     onClick={() => setShowModal(true)}
                     className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                     Add to Campaign
                   </button>
                 </div>
@@ -306,7 +306,7 @@ export default function InfluencerDetails() {
                   onClick={() => setShowReportModal(true)}
                   className="text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1 transition-colors"
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><line x1="4" y1="22" x2="4" y2="15" /></svg>
                   Report User
                 </button>
               </div>
@@ -372,7 +372,7 @@ export default function InfluencerDetails() {
           <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-4 rounded-xl mb-6 shadow-md flex flex-col md:flex-row justify-between items-center gap-4 animate-fadeIn">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
               </div>
               <div>
                 <div className="text-xs text-purple-200 font-semibold uppercase tracking-wider">{trustAiMetrics.modelType}</div>
@@ -460,7 +460,7 @@ export default function InfluencerDetails() {
               <div className="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-4 rounded-xl mb-3 shadow-md flex flex-col md:flex-row justify-between items-center gap-4 animate-fadeIn">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" /></svg>
                   </div>
                   <div>
                     <div className="text-xs text-purple-200 font-semibold uppercase tracking-wider">{roiResult.aiModelMetrics.modelType}</div>
@@ -529,10 +529,10 @@ export default function InfluencerDetails() {
                 {modalError}
               </div>
             )}
-            
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Select Campaign</label>
-              <select 
+              <select
                 value={selectedCampaign}
                 onChange={e => setSelectedCampaign(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-purple-500 bg-gray-50"
@@ -543,7 +543,7 @@ export default function InfluencerDetails() {
                 ))}
               </select>
               {campaigns.length === 0 && (
-                 <p className="text-xs text-orange-500 mt-2">You don't have any campaigns yet. Create one first.</p>
+                <p className="text-xs text-orange-500 mt-2">You don't have any campaigns yet. Create one first.</p>
               )}
             </div>
 
@@ -570,7 +570,7 @@ export default function InfluencerDetails() {
 
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Message to Influencer</label>
-              <textarea 
+              <textarea
                 rows={4}
                 value={message}
                 onChange={e => setMessage(e.target.value)}
@@ -580,13 +580,13 @@ export default function InfluencerDetails() {
             </div>
 
             <div className="flex gap-3 justify-end">
-              <button 
+              <button
                 onClick={() => setShowModal(false)}
                 className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleSendRequest}
                 disabled={
                   sending ||
@@ -608,11 +608,11 @@ export default function InfluencerDetails() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fadeIn border-t-4 border-red-500">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-500">
-                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
               </div>
               <h2 className="text-xl font-bold text-gray-900">Report User</h2>
             </div>
-            
+
             <p className="text-sm text-gray-500 mb-4">
               Please provide details about why you are reporting this influencer. Our trust and safety team will review this report.
             </p>
@@ -622,10 +622,10 @@ export default function InfluencerDetails() {
                 {reportError}
               </div>
             )}
-            
+
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Reason</label>
-              <select 
+              <select
                 value={reportReason}
                 onChange={e => setReportReason(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-red-500 bg-gray-50"
@@ -641,7 +641,7 @@ export default function InfluencerDetails() {
 
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">Additional Details</label>
-              <textarea 
+              <textarea
                 rows={4}
                 value={reportDetails}
                 onChange={e => setReportDetails(e.target.value)}
@@ -651,13 +651,13 @@ export default function InfluencerDetails() {
             </div>
 
             <div className="flex gap-3 justify-end">
-              <button 
+              <button
                 onClick={() => setShowReportModal(false)}
                 className="px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleReportUser}
                 disabled={reporting}
                 className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-70 disabled:cursor-not-allowed"

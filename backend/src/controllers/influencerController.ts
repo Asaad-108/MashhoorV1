@@ -38,11 +38,76 @@ export const getInfluencers = async (
 
     const filter: Record<string, unknown> = {};
 
+    const ALLOWED_INSTAGRAM_HANDLES = [
+      "bilalmunir1995", "xeetechcare", "minoqtopus",
+      "talhahanjum", "talhahyunus", "asimazhar", "alisethiofficial",
+      "babarazam", "ishaheenafridi10", "furqanbhatti.cricket", "saimayubb",
+      "safridiofficial", "mrizwanpak", "harisraufofficial", "inaseemshah",
+      "fakharzaman719", "realshoaibmalik", "m_hafeez8", "wasimakramliveofficial",
+      "theanonymousxd", "mrjayplays", "arslan.ash",
+      "hemayal", "ayeshabeigs", "hussain.tareen",
+      "waseembadami_official", "ganjiswag", "irfanjunejo", "flkkkk.iso",
+      "haniaheheofficial", "mahirahkhan", "ayezakhan.ak", "official_mayaali",
+      "sajalaly", "mawrellous", "yumnazaidiofficial", "wahaj.official",
+      "bilalabbas_khan", "danishtaimoor16", "muneeb_butt", "iiqraaziz",
+      "farhan_saeed", "ferozekhan", "duckybhai", "rajab.butt94", "sistrology___",
+      "shahveerjay", "umarkhan", "zaidalit", "wildlensbyabrar", "inkleftunsaid"
+    ];
+
+    // YouTube channel names (stored as handle in platforms.youtube.handle)
+    const ALLOWED_YOUTUBE_HANDLES = [
+      // Cricket
+      "Pakistan Wheelchair Cricket Council", "Cricket With Umer Afzaal 2.0",
+      "GTV Sports", "World Sports", "cricket lover Ali",
+      "Cricket with CH WALEED RAUF", "Pakistan Cricket",
+      "CatchAndBatwithKamranAkmal", "FurqanBhatti.Cricket",
+      // Music / Entertainment
+      "Top Folk Songs", "Talented Singers Of Pakistan",
+      "ShahveerJay", "NehaalNaseem", "shehrmaindihat",
+      "GanjiSwag", "Sistrology", "DuckyBhai", "rajabbutt94",
+      // Food / Lifestyle
+      "Street Food Pakistan", "Yes In Pakistan", "WildlensbyAbrar",
+      // Fashion
+      "SAPPHIRE Pakistan", "Eastern Fashion Pakistan", "Fashion In Pakistan",
+      // Tech / Education
+      "Aptech Learning Pakistan Official", "Pak Science Club",
+      "MAS TECH",
+      // News / Politics
+      "Pakistan Time News Official", "GEO SUPER", "DawnNews English",
+      "GNN", "365 Plus", "SUNO NEWS HD",
+      // Gaming
+      "Star ANONYMOUS", "GT ESPORTS", "Garena Free Fire Pakistan",
+      "pakistani gamer", "P9 GAMING YT", "MrJayPlays",
+
+      // New Channels
+      "Video Wali Sarkar", "PakWheels", "Young Stunners", "Nadir Ali",
+      "Kaifi Khalil", "Zalmi Plays", "Ducky Reloaded", "Rana Hamza Saif",
+      "Bhadar Gang", "Ali Zafar",
+    ];
+
+    // Find all users who signed up directly as influencers on the platform
+    const signedUpUserDocs = await User.find({ role: "influencer", hasSignedUp: true }).select("_id");
+    const signedUpUserIds = signedUpUserDocs.map(doc => doc._id);
+
     if (platform === "instagram") {
-      filter["platforms.instagram.handle"] = { $exists: true, $ne: "" };
+      filter.$or = [
+        { "platforms.instagram.handle": { $in: ALLOWED_INSTAGRAM_HANDLES } },
+        { user: { $in: signedUpUserIds }, "platforms.instagram.handle": { $exists: true, $ne: "" } }
+      ];
     } else if (platform === "youtube") {
-      filter["platforms.youtube.handle"] = { $exists: true, $ne: "" };
+      filter.$or = [
+        { "platforms.youtube.handle": { $in: ALLOWED_YOUTUBE_HANDLES } },
+        { user: { $in: signedUpUserIds }, "platforms.youtube.handle": { $exists: true, $ne: "" } }
+      ];
+    } else {
+      // All platforms: show allowed Instagram + allowed YouTube + any directly signed up influencer
+      filter.$or = [
+        { "platforms.instagram.handle": { $in: ALLOWED_INSTAGRAM_HANDLES } },
+        { "platforms.youtube.handle": { $in: ALLOWED_YOUTUBE_HANDLES } },
+        { user: { $in: signedUpUserIds } },
+      ];
     }
+
 
     if (niche) {
       // Case-insensitive niche match so "Fashion" matches stored "fashion", "FASHION", etc.
@@ -50,11 +115,18 @@ export const getInfluencers = async (
       filter.niche = { $in: nicheTerms.map((n) => new RegExp(`^${n}$`, "i")) };
     }
     if (country && country.trim()) {
-      filter.$or = [
+      const countryConditions = [
         { country: { $regex: country.trim(), $options: "i" } },
         { country: { $in: ["", null] } },
         { location: { $regex: country.trim(), $options: "i" } },
       ];
+      if (filter.$or) {
+        // Combine platform $or with country conditions via $and
+        filter.$and = [{ $or: filter.$or }, { $or: countryConditions }];
+        delete filter.$or;
+      } else {
+        filter.$or = countryConditions;
+      }
     }
     if (minFollowers) filter.totalFollowers = { $gte: Number(minFollowers) };
     if (maxFollowers)
@@ -100,26 +172,8 @@ export const getInfluencers = async (
       InfluencerProfile.countDocuments(filter),
     ]);
 
-    // If completely empty, fetch realtime data (seed from YouTube) and then re-query
-    if (total === 0 && Object.keys(filter).length <= 2) { // Allow empty filter or just page/limit defaults
-        try {
-            const { seedData } = await import("../seedYouTube");
-            await seedData();
-            
-            // Re-query after seeding
-            profiles = await InfluencerProfile.find(filter)
-              .populate({
-                path: "user",
-                select: "name email avatar hasSignedUp",
-              })
-              .sort(sortObj)
-              .skip(skip)
-              .limit(limitNum);
-            total = await InfluencerProfile.countDocuments(filter);
-        } catch (seedErr) {
-            console.error("Error auto-seeding YouTube data:", seedErr);
-        }
-    }
+
+
 
     // Filter out nulls (e.g. if the associated user was deleted)
     const filtered = profiles.filter((p) => p.user !== null);
@@ -178,7 +232,10 @@ export const getInfluencerById = async (
     profile.trustScoreBreakdown = breakdown;
     await profile.save();
 
-    const pastCampaigns = await Campaign.find({ selectedInfluencers: profile.user._id }).select("title description budget status createdAt");
+    const isRegistered = (profile.user as any)?.hasSignedUp === true;
+    const pastCampaigns = isRegistered
+      ? await Campaign.find({ selectedInfluencers: profile.user._id }).select("title description budget status createdAt")
+      : [];
     const profileObj = profile.toObject() as any;
     profileObj.pastCampaigns = pastCampaigns;
     profileObj.trustScore = score;

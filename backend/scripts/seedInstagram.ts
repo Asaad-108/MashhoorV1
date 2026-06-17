@@ -4,6 +4,8 @@ import { User } from "../src/models/User";
 import { InfluencerProfile } from "../src/models/InfluencerProfile";
 import connectDB from "../src/config/database";
 import { ApifyClient } from "apify-client";
+import { getRealEmailForInfluencer } from "../src/utils/influencerEmailsMap";
+import { calculateTrustScore } from "../src/services/trustScoreService";
 
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN as string;
 const client = new ApifyClient({ token: APIFY_API_TOKEN });
@@ -26,8 +28,8 @@ const PAKISTANI_INFLUENCERS = [
     "haniaheheofficial", "mahirahkhan", "ayezakhan.ak", "official_mayaali",
     "sajalaly", "mawrellous", "yumnazaidiofficial", "wahaj.official",
     "bilalabbas_khan", "danishtaimoor16", "muneeb_butt", "iiqraaziz",
-    "farhan_saeed", "ferozekhan", "duckybhai", "rajabali", "sistrology___",
-    "shahveerjay", "umarkhan", "zaidalit", "wildlensbyabrar"
+    "farhan_saeed", "ferozekhan", "duckybhai", "rajab.butt94", "sistrology___",
+    "shahveerjay", "umarkhan", "zaidalit", "wildlensbyabrar", "inkleftunsaid"
 ];
 
 const getNicheForUsername = (username: string) => {
@@ -63,6 +65,22 @@ async function imageToBase64(url: string): Promise<string> {
     }
 }
 
+async function makeUniqueEmail(email: string, username: string, currentUserId?: string): Promise<string> {
+    if (email.endsWith(".test")) return email;
+    const existingUser = await User.findOne({
+        email,
+        ...(currentUserId ? { _id: { $ne: currentUserId } } : {})
+    });
+    if (existingUser) {
+        const parts = email.split("@");
+        if (parts.length === 2) {
+            const cleanTag = username.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return `${parts[0]}+${cleanTag}@${parts[1]}`;
+        }
+    }
+    return email;
+}
+
 export async function seedInstagramDatabase() {
     console.log(`\n🚀 Initializing Apify Engine...`);
 
@@ -72,12 +90,31 @@ export async function seedInstagramDatabase() {
         }
 
         console.log("🧹 Clearing existing Instagram influencer data...");
-        // Carefully target only instagram profiles here instead of deleting everyone!
-        const profilesToDelete = await InfluencerProfile.find({ "platforms.instagram.handle": { $exists: true, $ne: "" } });
-        const userIdsToDelete = profilesToDelete.map(p => p.user);
+        const allIgProfiles = await InfluencerProfile.find({ "platforms.instagram.handle": { $exists: true, $ne: "" } });
+        
+        const userIdsToDelete: any[] = [];
+        const profileIdsToDelete: any[] = [];
 
-        await InfluencerProfile.deleteMany({ user: { $in: userIdsToDelete } });
-        await User.deleteMany({ _id: { $in: userIdsToDelete } });
+        for (const p of allIgProfiles) {
+            const hasYoutube = p.platforms?.youtube?.handle;
+            const hasTiktok = p.platforms?.tiktok?.handle;
+            if (hasYoutube || hasTiktok) {
+                if (p.platforms) {
+                    p.platforms.instagram = undefined;
+                }
+                await p.save();
+            } else {
+                userIdsToDelete.push(p.user);
+                profileIdsToDelete.push(p._id);
+            }
+        }
+
+        if (profileIdsToDelete.length > 0) {
+            await InfluencerProfile.deleteMany({ _id: { $in: profileIdsToDelete } });
+        }
+        if (userIdsToDelete.length > 0) {
+            await User.deleteMany({ _id: { $in: userIdsToDelete } });
+        }
 
         // CRITICAL UPDATE: resultsLimit forces the actor to pull the timeline posts payload
         const input = {
@@ -96,7 +133,8 @@ export async function seedInstagramDatabase() {
             const username = profile.username?.toLowerCase();
             if (!username) continue;
 
-            const email = `${username}@instagram.test`;
+            const resolvedEmail = getRealEmailForInfluencer(username);
+            let email = resolvedEmail ? resolvedEmail.toLowerCase() : `${username}@instagram.test`;
             const name = profile.fullName || profile.username;
             const followers = profile.followersCount || 0;
 
@@ -138,21 +176,53 @@ export async function seedInstagramDatabase() {
             const calculatedAvgLikes = latestPosts.length > 0 ? Math.floor(totalLikes / latestPosts.length) : 0;
             const calculatedAvgComments = latestPosts.length > 0 ? Math.floor(totalComments / latestPosts.length) : 0;
 
-            let user = await User.findOne({ email });
-            if (!user) {
-                user = await User.create({
-                    name: name,
-                    email: email,
-                    password: "Password123!",
-                    role: "influencer",
-                    avatar: safeBase64Avatar, // Injected as local asset data string
-                    isVerified: profile.isVerified || false
-                });
+            let influencerProfile = await InfluencerProfile.findOne({ 
+                $or: [
+                    { "platforms.instagram.handle": username },
+                    { "platforms.instagram.handle": profile.username }
+                ]
+            });
+            let user;
+
+            if (influencerProfile) {
+                user = await User.findById(influencerProfile.user);
+                if (user) {
+                    user.name = name;
+                    user.email = await makeUniqueEmail(email, username, user._id.toString());
+                    user.avatar = safeBase64Avatar || user.avatar;
+                    await user.save();
+                } else {
+                    email = await makeUniqueEmail(email, username);
+                    user = await User.create({
+                        name: name,
+                        email: email,
+                        password: "Password123!",
+                        role: "influencer",
+                        avatar: safeBase64Avatar,
+                        isVerified: profile.isVerified || false
+                    });
+                    influencerProfile.user = user._id;
+                }
+            } else {
+                email = await makeUniqueEmail(email, username);
+                user = await User.findOne({ email });
+                if (!user) {
+                    user = await User.create({
+                        name: name,
+                        email: email,
+                        password: "Password123!",
+                        role: "influencer",
+                        avatar: safeBase64Avatar,
+                        isVerified: profile.isVerified || false
+                    });
+                }
+                
+                // Fallback: Check if this user already has an existing profile (e.g. seeded via YouTube)
+                influencerProfile = await InfluencerProfile.findOne({ user: user._id });
             }
 
-            let influencerProfile = await InfluencerProfile.findOne({ user: user._id });
             if (!influencerProfile) {
-                await InfluencerProfile.create({
+                influencerProfile = await InfluencerProfile.create({
                     user: user._id,
                     niche: [getNicheForUsername(username)],
                     location: "Pakistan",
@@ -170,8 +240,24 @@ export async function seedInstagramDatabase() {
                     trustScore: 0,
                     isVerified: profile.isVerified || false
                 });
-                console.log(`✅ Verified and stored @${username} [Real Engagement: ${finalEngagementRate.toFixed(2)}%]`);
+            } else {
+                influencerProfile.bio = bio || influencerProfile.bio;
+                if (!influencerProfile.platforms) influencerProfile.platforms = {} as any;
+                influencerProfile.platforms.instagram = {
+                    handle: profile.username,
+                    followers: followers,
+                    engagementRate: Number(Math.min(100, finalEngagementRate).toFixed(2)),
+                    avgLikes: calculatedAvgLikes,
+                    avgComments: calculatedAvgComments
+                };
+                await influencerProfile.save();
             }
+
+            const { score, breakdown } = await calculateTrustScore(influencerProfile);
+            influencerProfile.trustScore = score;
+            influencerProfile.trustScoreBreakdown = breakdown;
+            await influencerProfile.save();
+            console.log(`✅ Verified, scored (${score}/100) and stored @${username} [Real Engagement: ${finalEngagementRate.toFixed(2)}%]`);
         }
 
         console.log("\n🏆 Instagram Data Seeding completely successful!");

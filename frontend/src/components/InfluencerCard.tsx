@@ -49,13 +49,10 @@ function InfluencerCard({
               height={17}
             />
           </div>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm text-gray-500">{niche}</span>
-            {systemCategory && (
-              <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-medium">
-                {systemCategory}
-              </span>
-            )}
+          <div className="flex items-center mt-1">
+            <span className="bg-purple-100 text-purple-700 text-xs px-2.5 py-1 rounded-full font-medium">
+              {niche.split(",")[0] || "General"}
+            </span>
           </div>
         </div>
       </div>

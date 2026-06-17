@@ -273,16 +273,19 @@ export class MultipleLinearRegression {
     const eScaled = f.engagementRate / 100;
     const tScaled = f.trustScore / 100;
     const iScaled = f.investment / 100000;
+    
+    // Price elasticity: standard baseline is Rs. 2000. Capped at min Rs. 500. Exponent is 0.15 for a gentle curve.
+    const pScaled = Math.pow(2000 / Math.max(500, f.productValue), 0.15);
 
     return [
       1, // Bias term x0
-      rScaled, // x1: Scaled reach
+      rScaled * pScaled, // x1: Price-adjusted scaled reach
       eScaled, // x2: Scaled engagement
       tScaled, // x3: Scaled trust
-      iScaled, // x4: Scaled investment
-      rScaled * eScaled, // x5: Effective engaged reach
-      tScaled * iScaled, // x6: Trust-backed budget effectiveness
-      Math.log((f.reach / 1000) + 1) // x7: Log reach for diminishing returns
+      iScaled * pScaled, // x4: Price-adjusted scaled investment
+      rScaled * eScaled * pScaled, // x5: Price-adjusted effective engaged reach
+      tScaled * iScaled * pScaled, // x6: Price-adjusted budget effectiveness
+      Math.log((f.reach / 1000) + 1) * pScaled // x7: Price-adjusted log reach
     ];
   }
 
@@ -445,7 +448,7 @@ export const roiBenchmarkDataset: ROITrainingSample[] = [
 ];
 
 // Initialize and fit the singleton ML regression model
-const roiRegressionModel = new MultipleLinearRegression();
+const roiRegressionModel = new MultipleLinearRegression(200);
 roiRegressionModel.fit(roiBenchmarkDataset);
 
 export const predictCampaignROIWithML = (
@@ -455,30 +458,71 @@ export const predictCampaignROIWithML = (
   investment: number, 
   productValue: number
 ) => {
+  // Preprocessing: Cap engagement rate at a realistic top-tier benchmark of 10%
+  const cleanEngagementRate = Math.min(10, engagementRate);
+
   const targetFeatures: ROIFeatures = {
     reach,
-    engagementRate,
+    engagementRate: cleanEngagementRate,
     trustScore,
     investment,
     productValue
   };
 
-  const predictedConversions = roiRegressionModel.predict(targetFeatures);
+  const rawPredictedConversions = roiRegressionModel.predict(targetFeatures);
   const metrics = roiRegressionModel.evaluate(roiBenchmarkDataset);
+
+  // Reality-based digital marketing funnel constraints (defensible benchmarks)
+  // 1. Calculate Estimated Market CPM Rate (e.g. Rs. 200 per 1,000 views)
+  const cpmRate = 200; 
+  const marketCost = Math.max(10000, (reach / 1000) * cpmRate);
+  
+  // 2. Budget exposure factor (determines what % of audience is reached with this budget)
+  // Using Math.pow to scale non-linearly so larger reach retains a higher exposure
+  const reachFraction = Math.max(0.01, Math.min(1.0, (investment / marketCost) * Math.pow(reach / 100000, 0.15)));
+  const effectiveReach = reach * reachFraction;
+  
+  // 3. Realistic Click-Through Rate (CTR) scaled by engagement (capped at 10% engagement)
+  const ctr = 0.02 * (cleanEngagementRate / 5); 
+  
+  // 4. Realistic Conversion Rate (CR) of 2% of clicks
+  const cr = 0.02;
+  
+  // 5. Trust factor multiplier
+  const trustFactor = trustScore / 100;
+  
+  // Price elasticity: as product price increases, purchase volume drops non-linearly. Baseline is Rs. 2000. Exponent is 0.15 for a gentle curve.
+  const priceFactor = Math.pow(2000 / Math.max(500, productValue), 0.15);
+  
+  // 6. Calculate funnel conversions (scaled by price factor)
+  const funnelConversions = effectiveReach * ctr * cr * trustFactor * priceFactor;
+
+  // Blend ML prediction (80% weight) with the reality-grounded funnel (20% weight)
+  let blendedConversions = (funnelConversions * 0.20) + (rawPredictedConversions * 0.80);
+
+  // Dynamic soft ceiling based on creator stats, investment, and price factor
+  const ceiling = (investment / 45) * (trustScore / 100) * (1 + cleanEngagementRate / 100) * priceFactor;
+
+  // Smooth saturation curve: prevents hard flat caps and ensures the ML prediction
+  // directly influences the final result while keeping it realistic.
+  const predictedConversions = Math.min(
+    Math.round(ceiling),
+    Math.round(ceiling * (blendedConversions / (blendedConversions + ceiling * 0.6)))
+  );
 
   const estimatedRevenue = predictedConversions * productValue;
   const netROI = estimatedRevenue - investment;
   const roiPercentage = investment > 0 ? (netROI / investment) * 100 : 0;
 
   return {
-    predictedConversions: Math.round(predictedConversions),
+    predictedConversions,
     estimatedRevenue: Math.round(estimatedRevenue),
     predictedROI: Math.round(netROI),
     roiPercentage: Number(roiPercentage.toFixed(1)),
     aiModelMetrics: {
       r2Score: metrics.r2Score,
       meanAbsoluteError: metrics.meanAbsoluteError,
-      modelType: "Multiple Polynomial Regression (Ridge)"
+      modelType: "Hybrid ML & Funnel Regression (Ridge)"
     }
   };
 };

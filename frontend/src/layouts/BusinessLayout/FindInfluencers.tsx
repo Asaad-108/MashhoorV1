@@ -148,7 +148,7 @@ function FindInfluencers() {
       sort,
     });
     setPage(1); // Reset page on filter change
-    
+
     // If in recommended mode, refetch recommendations when niche changes
     if (isRecommendedMode) {
       fetchRecommendations();
@@ -202,8 +202,7 @@ function FindInfluencers() {
               >
                 <option value="">All niches</option>
                 {NICHES.map((n) => (
-                  // "Entertainment" also matches old "Music" records in DB
-                  <option key={n} value={n === "Entertainment" ? "Entertainment,Music" : n}>{n}</option>
+                  <option key={n} value={n}>{n}</option>
                 ))}
               </select>
             </div>
@@ -294,16 +293,16 @@ function FindInfluencers() {
               {loading ? "Loading..." : `${isRecommendedMode ? displayedInfluencers.length : (pagination?.total ?? displayedInfluencers.length)} influencers found`}
             </span>
             {!isRecommendedMode && (
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as typeof sort)}
-              className="bg-[#f3f4f6] border border-gray-200 rounded-lg px-4 py-2 text-sm text-gray-700 outline-none cursor-pointer"
-            >
-              <option value="trustScore">Highest Trust Score</option>
-              <option value="followers">Most Followers</option>
-              <option value="engagement">Best Engagement</option>
-              <option value="newest">Newest Members</option>
-            </select>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as typeof sort)}
+                className="bg-[#f3f4f6] border border-gray-200 rounded-lg px-4 py-2 text-sm text-gray-700 outline-none cursor-pointer"
+              >
+                <option value="trustScore">Highest Trust Score</option>
+                <option value="followers">Most Followers</option>
+                <option value="engagement">Best Engagement</option>
+                <option value="newest">Newest Members</option>
+              </select>
             )}
             {isRecommendedMode && (
               <span className="text-sm font-medium text-purple-600 bg-purple-50 px-3 py-1 rounded-full">Sorted by AI Match Score</span>
@@ -394,11 +393,10 @@ function FindInfluencers() {
                 <button
                   key={i}
                   onClick={() => setPage(i + 1)}
-                  className={`w-10 h-10 rounded-lg font-medium flex items-center justify-center text-sm ${
-                    pagination.page === i + 1
-                      ? "bg-purple-600 text-white"
-                      : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                  }`}
+                  className={`w-10 h-10 rounded-lg font-medium flex items-center justify-center text-sm ${pagination.page === i + 1
+                    ? "bg-purple-600 text-white"
+                    : "border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
                 >
                   {i + 1}
                 </button>
@@ -425,7 +423,7 @@ function FindInfluencers() {
                 ? "They are registered on Mashhoor — they will receive your invite inside the app."
                 : "This creator is not registered yet. Mashhoor will email them an invitation automatically."}
             </p>
-            
+
             <div className="space-y-4">
               {needsContactEmail && (
                 <div>
@@ -511,9 +509,8 @@ function FindInfluencers() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 transform transition-all duration-300 ${
-          toast.type === "success" ? "bg-gray-900 text-green-400" : "bg-red-600 text-white"
-        }`}>
+        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 transform transition-all duration-300 ${toast.type === "success" ? "bg-gray-900 text-green-400" : "bg-red-600 text-white"
+          }`}>
           {toast.type === "success" ? (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

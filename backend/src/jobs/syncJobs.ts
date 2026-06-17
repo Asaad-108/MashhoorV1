@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { ApifyClient } from "apify-client";
 import { InfluencerProfile } from "../models/InfluencerProfile";
 import { User } from "../models/User";
+import { getYouTubeApiKey } from "../config/youtube";
 
 const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN as string;
 const client = new ApifyClient({ token: APIFY_API_TOKEN });
@@ -130,10 +131,99 @@ async function syncAllInstagramData() {
     }
 }
 
+/**
+ * Runs a bulk update for all YouTube influencers currently in the database.
+ * Fetches their latest statistics from the official YouTube API and updates the DB.
+ */
+async function syncAllYouTubeData() {
+    console.log(`\n[CRON] 🚀 Starting 24-hour Background YouTube Data Sync...`);
+
+    const apiKey = getYouTubeApiKey();
+    if (!apiKey) {
+        console.warn("[CRON] YOUTUBE_API_KEY not configured. Skipping YouTube sync.");
+        return;
+    }
+
+    try {
+        const profiles = await InfluencerProfile.find({ "platforms.youtube.handle": { $exists: true, $ne: "" } });
+
+        if (profiles.length === 0) {
+            console.log("[CRON] No YouTube profiles found in DB. Skipping sync.");
+            return;
+        }
+
+        console.log(`[CRON] Found ${profiles.length} YouTube profiles to sync.`);
+        let count = 0;
+
+        for (const profile of profiles) {
+            if (!profile.platforms?.youtube?.handle) continue;
+
+            let handle = profile.platforms.youtube.handle;
+            if (handle.includes("youtube.com/")) {
+                handle = handle.split("/").pop() || handle;
+            }
+            handle = handle.replace("@", "");
+
+            try {
+                const searchURL = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(handle)}&key=${apiKey}`;
+                const searchRes = await fetch(searchURL);
+                const searchData = await searchRes.json() as any;
+
+                if (searchData.items && searchData.items.length > 0) {
+                    const channelId = searchData.items[0].snippet.channelId;
+                    const statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${channelId}&key=${apiKey}`;
+                    const statsRes = await fetch(statsURL);
+                    const statsData = await statsRes.json() as any;
+                    const channelData = statsData.items?.[0];
+
+                    if (channelData) {
+                        const subs = parseInt(channelData.statistics.subscriberCount || "0", 10);
+                        const views = parseInt(channelData.statistics.viewCount || "0", 10);
+                        const videoCount = parseInt(channelData.statistics.videoCount || "0", 10);
+                        const description = channelData.snippet.description;
+
+                        const avgViews = Math.floor(views / (videoCount || 1)) || 0;
+                        const engagementRate = Math.min(100, Number(((avgViews / (subs || 1)) * 100).toFixed(2)));
+
+                        profile.platforms.youtube.subscribers = subs;
+                        profile.platforms.youtube.avgViews = avgViews;
+                        profile.platforms.youtube.engagementRate = engagementRate;
+                        profile.totalFollowers = subs;
+                        profile.avgEngagementRate = engagementRate;
+
+                        if (!profile.bio || profile.bio.length < 10) {
+                            profile.bio = description || profile.bio;
+                        }
+
+                        await profile.save();
+                        count++;
+                    }
+                }
+            } catch (err) {
+                console.error(`[CRON] ❌ Error syncing YouTube channel "${handle}":`, err);
+            }
+        }
+
+        console.log(`[CRON] ✅ 24-hour Background YouTube Data Sync completed! Updated ${count} profiles.`);
+    } catch (error) {
+        console.error("[CRON] ❌ Scheduled YouTube Sync failed:", error);
+    }
+}
+
 export function setupCronJobs() {
     // Run exactly at Midnight (00:00) every single day
-    cron.schedule("0 0 * * *", () => {
-        syncAllInstagramData();
+    cron.schedule("0 0 * * *", async () => {
+        try {
+            await syncAllInstagramData();
+        } catch (err) {
+            console.error("[CRON] Instagram Sync job error:", err);
+        }
+
+        try {
+            await syncAllYouTubeData();
+        } catch (err) {
+            console.error("[CRON] YouTube Sync job error:", err);
+        }
     });
 
     console.log("⏰ Cron jobs initialized. Background data sync scheduled for midnight daily.");

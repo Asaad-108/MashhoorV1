@@ -1,5 +1,6 @@
 import { IInfluencerProfile } from "../models/InfluencerProfile";
 import { Campaign } from "../models/Campaign";
+import { User } from "../models/User";
 import { calculateTrustScoreWithML } from "./mlService";
 import {
   getUnifiedPlatformMetrics,
@@ -130,7 +131,13 @@ export const calculateTrustScore = async (
 
   const isVerified = profile.isVerified || false;
 
-  const pastCampaigns = await Campaign.find({ selectedInfluencers: profile.user });
+  // Only count collaborations if the influencer has signed up on the platform
+  const user = await User.findById(profile.user).select("hasSignedUp");
+  const isRegistered = user?.hasSignedUp === true;
+
+  const pastCampaigns = isRegistered
+    ? await Campaign.find({ selectedInfluencers: profile.user })
+    : [];
   const campaignCount = pastCampaigns.length;
   let collaborationHistory = 0;
 

@@ -34,7 +34,7 @@ const seedDummy = async () => {
       profile = new InfluencerProfile({
         user: user._id,
         bio: "This is a dummy bio for Muhammad Asad.",
-        niche: ["Tech", "Lifestyle"],
+        niche: ["Tech"],
         location: "Pakistan",
         platforms: {
           instagram: {
