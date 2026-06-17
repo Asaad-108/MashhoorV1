@@ -8,6 +8,9 @@ export let transporter = nodemailer.createTransport({
     user: process.env.SMTP_LOGIN,
     pass: process.env.SMTP_PASSWORD,
   },
+  connectionTimeout: 15_000,
+  greetingTimeout: 15_000,
+  socketTimeout: 20_000,
 });
 
 export const isEmailConfigured = (): boolean =>
@@ -36,13 +39,23 @@ export const sendEmail = async (
   text: string,
   html?: string
 ) => {
-  const info = await transporter.sendMail({
-    from: process.env.EMAIL_FROM || "Mashhoor <noreply@mashhoor.com>",
-    to,
-    subject,
-    text,
-    html,
-  });
-  console.log(`✅ Email sent to ${to}: ${info.messageId}`);
-  return info;
+  if (!isEmailConfigured()) {
+    throw new Error("SMTP is not configured (SMTP_LOGIN / SMTP_PASSWORD missing)");
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM || "Mashhoor <noreply@mashhoor.com>",
+      to,
+      subject,
+      text,
+      html,
+    });
+    console.log(`✅ Email sent to ${to}: ${info.messageId}`);
+    return info;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`❌ Failed to send email to ${to}:`, message);
+    throw err;
+  }
 };

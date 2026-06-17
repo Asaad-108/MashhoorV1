@@ -44,7 +44,11 @@ export const getInfluencers = async (
       filter["platforms.youtube.handle"] = { $exists: true, $ne: "" };
     }
 
-    if (niche) filter.niche = { $in: niche.split(",") };
+    if (niche) {
+      // Case-insensitive niche match so "Fashion" matches stored "fashion", "FASHION", etc.
+      const nicheTerms = niche.split(",").map((n) => n.trim()).filter(Boolean);
+      filter.niche = { $in: nicheTerms.map((n) => new RegExp(`^${n}$`, "i")) };
+    }
     if (country && country.trim()) {
       filter.$or = [
         { country: { $regex: country.trim(), $options: "i" } },
@@ -120,38 +124,14 @@ export const getInfluencers = async (
     // Filter out nulls (e.g. if the associated user was deleted)
     const filtered = profiles.filter((p) => p.user !== null);
 
-    // Automatically update Trust Scores in real-time for all cards
-    const updatedFiltered = await Promise.all(
-      filtered.map(async (profile) => {
-        try {
-          // Fetch real-time data from APIs
-          const user = profile.user as any;
-          const userEmail = user?.email;
-          
-          // We no longer live-sync YouTube on the list view to save API Quota and improve load speeds.
-          // Data is now purely served from the database cache.
-          // if (userEmail && userEmail.endsWith("@youtube.test")) {
-          //   await syncYouTubeForProfile(profile, userEmail);
-          // } 
-          // Note: Instagram sync is deliberately skipped here because Apify actor calls take 15-30s per profile,
-          // which would cause the entire Find Influencers screen to freeze for minutes. 
-          // Instagram data is populated via the seed script instead.
-
-          const { score, breakdown } = await calculateTrustScore(profile);
-          profile.trustScore = score;
-          profile.trustScoreBreakdown = breakdown;
-          await profile.save();
-          return profile;
-        } catch (calcErr) {
-          console.error("Error auto-updating trust score in list:", calcErr);
-          return profile;
-        }
-      })
-    );
+    // Serve trust scores directly from DB cache — recalculation is done lazily
+    // when a profile is individually viewed (getInfluencerById) or explicitly
+    // requested (calculateInfluencerTrustScore). Computing + saving on every
+    // list request caused 8-10 s load times for a 12-card page.
 
     res.status(200).json({
       success: true,
-      data: updatedFiltered,
+      data: filtered,
       pagination: {
         total,
         page: pageNum,
@@ -178,7 +158,20 @@ export const getInfluencerById = async (
     if (!profile) return next(new AppError("Influencer not found", 404));
 
     const user = profile.user as { email?: string };
-    await syncYouTubeForProfile(profile, user?.email);
+    const hasYouTubeHandle = !!profile.platforms?.youtube?.handle?.trim();
+    const isSeeded = user?.email?.endsWith("@youtube.test");
+    if (hasYouTubeHandle || isSeeded) {
+      const YOUTUBE_SYNC_TTL_MS = 60 * 60 * 1000; // 1 hour
+      const lastSynced = profile.updatedAt ? new Date(profile.updatedAt).getTime() : 0;
+      if (Date.now() - lastSynced >= YOUTUBE_SYNC_TTL_MS) {
+        try {
+          await syncYouTubeForProfile(profile, user?.email);
+        } catch (syncErr) {
+          const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+          console.warn(`getInfluencerById: YouTube sync skipped (network error): ${msg}`);
+        }
+      }
+    }
 
     const { score, breakdown, aiModelMetrics } = await calculateTrustScore(profile);
     profile.trustScore = score;
@@ -227,7 +220,12 @@ export const updateMyProfile = async (
     const userEmail = userDoc?.email;
     let youtubeSynced = false;
     if (profile.platforms?.youtube?.handle?.trim()) {
-      youtubeSynced = await syncYouTubeForProfile(profile, userEmail);
+      try {
+        youtubeSynced = await syncYouTubeForProfile(profile, userEmail);
+      } catch (syncErr) {
+        const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+        console.warn(`updateMyProfile: YouTube sync skipped (network error): ${msg}`);
+      }
     }
 
     if (profile.platforms?.instagram) {
@@ -413,9 +411,19 @@ export const calculateInfluencerTrustScore = async (
     const userEmail = user?.email;
     
     if (userEmail && userEmail.endsWith("@youtube.test")) {
-      await syncYouTubeForProfile(profile, userEmail);
+      try {
+        await syncYouTubeForProfile(profile, userEmail);
+      } catch (syncErr) {
+        const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+        console.warn(`calculateInfluencerTrustScore: YouTube sync skipped (network error): ${msg}`);
+      }
     } else if (profile.platforms?.instagram?.handle) {
-      await syncInstagramForProfile(profile, userEmail);
+      try {
+        await syncInstagramForProfile(profile, userEmail);
+      } catch (syncErr) {
+        const msg = syncErr instanceof Error ? syncErr.message : String(syncErr);
+        console.warn(`calculateInfluencerTrustScore: Instagram sync skipped (network error): ${msg}`);
+      }
     }
 
     const { score, breakdown, aiModelMetrics } = await calculateTrustScore(profile);

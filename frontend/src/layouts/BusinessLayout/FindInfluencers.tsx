@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { InfluencerCard } from "../../components";
 import { useInfluencers } from "../../hooks/useInfluencers";
-import { campaignApi, isPlaceholderInfluencerEmail, isRegisteredOnPlatform, influencerApi, type Campaign } from "../../api";
+import { campaignApi, isPlaceholderInfluencerEmail, isRegisteredOnPlatform, hasDeliverableEmail, resolveOutreachContactEmail, influencerApi, type Campaign } from "../../api";
 import type { InfluencerProfile } from "../../api/influencerApi";
 
-const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Tech"];
+const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Tech", "Music", "Lifestyle"];
 
 function FindInfluencers() {
   const [search, setSearch] = useState("");
@@ -48,11 +48,16 @@ function FindInfluencers() {
 
   const isOnPlatform = isRegisteredOnPlatform({ hasSignedUp: contactModal.hasSignedUp });
   const needsContactEmail =
-    !isOnPlatform && isPlaceholderInfluencerEmail(contactModal.influencerEmail);
+    !isOnPlatform && !hasDeliverableEmail(contactModal.influencerEmail);
 
   const handleAddToCampaign = async () => {
     if (!selectedCampaignId || !outreachMessage.trim() || !contactModal.influencerId) return;
-    if (needsContactEmail && !contactEmail.trim()) {
+
+    const emailToSend = resolveOutreachContactEmail(
+      contactModal.influencerEmail,
+      contactEmail
+    );
+    if (!isOnPlatform && !emailToSend) {
       showToast("Add their real email — Mashhoor will send the invitation automatically.", "error");
       return;
     }
@@ -62,7 +67,7 @@ function FindInfluencers() {
         selectedCampaignId,
         contactModal.influencerId,
         outreachMessage,
-        needsContactEmail ? contactEmail.trim() : undefined
+        !isOnPlatform ? emailToSend : undefined
       );
       setContactModal({ isOpen: false, influencerId: "", influencerName: "" });
       setOutreachMessage("");
@@ -196,7 +201,10 @@ function FindInfluencers() {
                 className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 outline-none focus:border-purple-500"
               >
                 <option value="">All niches</option>
-                {NICHES.map((n) => <option key={n}>{n}</option>)}
+                {NICHES.map((n) => (
+                  // "Entertainment" also matches old "Music" records in DB
+                  <option key={n} value={n === "Entertainment" ? "Entertainment,Music" : n}>{n}</option>
+                ))}
               </select>
             </div>
 
@@ -431,7 +439,17 @@ function FindInfluencers() {
                     placeholder="creator@email.com"
                     className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-sm text-gray-600 outline-none focus:border-purple-500"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Required for creators not on Mashhoor yet (seeded profiles use placeholder emails).
+                  </p>
                 </div>
+              )}
+
+              {!isOnPlatform && !needsContactEmail && contactModal.influencerEmail && (
+                <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                  Invitation will be emailed to{" "}
+                  <strong>{contactModal.influencerEmail}</strong>
+                </p>
               )}
 
               <div>
@@ -475,9 +493,15 @@ function FindInfluencers() {
                     !outreachMessage.trim() ||
                     (needsContactEmail && !contactEmail.trim())
                   }
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 min-w-[148px]"
                 >
-                  {isSending ? "Adding..." : "Add to Campaign"}
+                  {isSending
+                    ? isOnPlatform
+                      ? "Sending invite..."
+                      : "Sending email..."
+                    : isOnPlatform
+                      ? "Send Invite"
+                      : "Send Email Invite"}
                 </button>
               </div>
             </div>

@@ -24,17 +24,25 @@ const toBusinessId = (userId: string) => new mongoose.Types.ObjectId(userId);
 const toTimestamp = (value: Date | string | undefined) =>
   value ? new Date(value).getTime() : 0;
 
-/** Refresh YouTube stats when a handle is set or account is a seeded @youtube.test profile. */
+const YOUTUBE_SYNC_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Refresh YouTube stats — skipped if synced within the last hour to avoid hammering the API. */
 async function refreshYouTubeAnalytics(profile: IInfluencerProfile): Promise<void> {
   const user = profile.user as { email?: string } | undefined;
   const hasHandle = !!profile.platforms?.youtube?.handle?.trim();
   const isSeeded = user?.email?.endsWith("@youtube.test");
   if (!hasHandle && !isSeeded) return;
 
+  // Skip sync if the profile was updated recently (within TTL)
+  const lastSynced = profile.updatedAt ? new Date(profile.updatedAt).getTime() : 0;
+  if (Date.now() - lastSynced < YOUTUBE_SYNC_TTL_MS) return;
+
   try {
     await syncYouTubeForProfile(profile, user?.email);
   } catch (err) {
-    console.error("Dashboard YouTube sync failed:", err);
+    // Log a short warning only — full stack trace is not useful for network timeouts
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`Dashboard YouTube sync skipped (network error): ${msg}`);
   }
 }
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import { campaignApi } from "../../api/campaignApi";
 import type { Campaign } from "../../api/campaignApi";
-import { isPlaceholderInfluencerEmail, isRegisteredOnPlatform } from "../../api/outreachApi";
+import { isPlaceholderInfluencerEmail, isRegisteredOnPlatform, hasDeliverableEmail, resolveOutreachContactEmail } from "../../api/outreachApi";
 import { influencerApi } from "../../api/influencerApi";
 import type { ROIPredictionResult } from "../../api/influencerApi";
 import { reportApi } from "../../api/reportApi";
@@ -101,13 +101,15 @@ export default function InfluencerDetails() {
 
   const isOnPlatform = isRegisteredOnPlatform(profile?.user);
   const needsContactEmail =
-    !isOnPlatform && isPlaceholderInfluencerEmail(profile?.user?.email);
+    !isOnPlatform && !hasDeliverableEmail(profile?.user?.email);
 
   const handleSendRequest = async () => {
     if (!selectedCampaign) return setModalError("Please select a campaign");
     if (!message) return setModalError("Please add a message");
-    if (needsContactEmail && !contactEmail.trim()) {
-      return setModalError("Add their real email — Mashhoor will send the invitation automatically.");
+
+    const emailToSend = resolveOutreachContactEmail(profile?.user?.email, contactEmail);
+    if (!isOnPlatform && !emailToSend) {
+      return setModalError("Enter their real email so Mashhoor can send the invitation.");
     }
 
     setSending(true);
@@ -118,7 +120,7 @@ export default function InfluencerDetails() {
           selectedCampaign,
           profile.user._id,
           message,
-          needsContactEmail ? contactEmail.trim() : undefined
+          !isOnPlatform ? emailToSend : undefined
         );
         setShowModal(false);
         setMessage("");
@@ -515,8 +517,13 @@ export default function InfluencerDetails() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-fadeIn">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Add to Campaign</h2>
-            
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Add to Campaign</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              {isOnPlatform
+                ? "They are registered on Mashhoor — they will receive your invite in the app."
+                : "This creator is not registered yet. Mashhoor will email them an invitation to join."}
+            </p>
+
             {modalError && (
               <div className="mb-4 bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-200">
                 {modalError}
@@ -542,9 +549,6 @@ export default function InfluencerDetails() {
 
             {needsContactEmail && (
               <div className="mb-4">
-                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                  This creator is not registered on Mashhoor. Add their email to send an invitation.
-                </p>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Their email <span className="text-red-500">*</span>
                 </label>
@@ -556,6 +560,12 @@ export default function InfluencerDetails() {
                   className="w-full border border-gray-200 rounded-lg p-3 text-gray-900 focus:outline-none focus:border-purple-500 bg-gray-50"
                 />
               </div>
+            )}
+
+            {!isOnPlatform && !needsContactEmail && profile?.user?.email && (
+              <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-4">
+                Invitation will be emailed to <strong>{profile.user.email}</strong>
+              </p>
             )}
 
             <div className="mb-6">
@@ -578,7 +588,11 @@ export default function InfluencerDetails() {
               </button>
               <button 
                 onClick={handleSendRequest}
-                disabled={sending || campaigns.length === 0}
+                disabled={
+                  sending ||
+                  campaigns.length === 0 ||
+                  (needsContactEmail && !contactEmail.trim())
+                }
                 className="px-6 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {sending ? "Adding..." : "Add to Campaign"}

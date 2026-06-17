@@ -33,13 +33,6 @@ function scoreEngagementAuthenticity(
     return 68 + boost;
   }
 
-  if (platform === "tiktok") {
-    if (engagementRate >= 3 && engagementRate <= 18) return 94 + boost;
-    if (engagementRate > 35) return 38;
-    if (engagementRate < 0.5) return 10;
-    return 72 + boost;
-  }
-
   // YouTube (default)
   if (followers < 10000) {
     if (engagementRate >= 3 && engagementRate <= 15) return 95 + boost;
@@ -70,13 +63,6 @@ function scoreFollowerQuality(
     if (rate >= 0.005) return 45 + Math.floor((rate - 0.005) * 2700);
     if (rate > 0) return Math.max(12, Math.floor(rate * 8000));
     return followers < 500 ? 15 : 6;
-  }
-
-  if (platform === "tiktok") {
-    if (interactionRate >= 0.08) return Math.min(100, 85 + Math.floor(interactionRate * 120));
-    if (interactionRate >= 0.03) return 70 + Math.floor((interactionRate - 0.03) * 300);
-    if (interactionRate > 0) return Math.max(10, Math.floor(interactionRate * 2000));
-    return followers < 500 ? 15 : 8;
   }
 
   // YouTube: views-to-subscriber ratio

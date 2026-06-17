@@ -33,7 +33,6 @@ export function getPrimaryPlatform(profile: IInfluencerProfile): PrimaryPlatform
   const leaders: PrimaryPlatform[] = [];
   if (ig === max) leaders.push("instagram");
   if (yt === max) leaders.push("youtube");
-  if (tt === max) leaders.push("tiktok");
   if (leaders.length > 1) return "mixed";
   return leaders[0];
 }

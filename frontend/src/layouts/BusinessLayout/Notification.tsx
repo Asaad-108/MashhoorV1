@@ -96,7 +96,9 @@ function Notification() {
     try {
       await notificationApi.markAllRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, isUnread: false })));
-      window.dispatchEvent(new Event("dashboard_refresh"));
+      setTimeout(() => {
+        window.dispatchEvent(new Event("dashboard_refresh"));
+      }, 500);
     } catch (err) {
       console.error(err);
     }

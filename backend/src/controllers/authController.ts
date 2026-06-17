@@ -5,6 +5,7 @@ import { User } from "../models/User";
 import { InfluencerProfile } from "../models/InfluencerProfile";
 import { EmailInvite } from "../models/EmailInvite";
 import { AppError } from "../middleware/errorHandler";
+import { getPublicClientUrl } from "../config/publicUrl";
 import { sendEmail, isEmailConfigured } from "../services/emailService";
 import { AuthRequest, JwtPayload, UserRole } from "../types";
 
@@ -303,7 +304,7 @@ export const forgotPassword = async (
       await user.save();
 
       if (isEmailConfigured()) {
-        const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+        const clientUrl = getPublicClientUrl();
         const link = `${clientUrl}/reset-password?token=${resetToken}`;
         await sendEmail(
           user.email,

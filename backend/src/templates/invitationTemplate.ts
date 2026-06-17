@@ -2,8 +2,28 @@ export const invitationTemplate = (
   influencerName: string,
   campaignName: string,
   inviteLink: string,
-  businessName: string
+  businessName: string,
+  personalMessage?: string
 ) => {
+  const messageBlock = personalMessage?.trim()
+    ? `
+<div style="
+background:#fffbeb;
+border-left:4px solid #f59e0b;
+padding:18px;
+border-radius:12px;
+margin:20px 0;
+">
+<p style="margin:0 0 8px;font-size:14px;color:#92400e;font-weight:600;">
+Message from ${businessName}:
+</p>
+<p style="margin:0;font-size:15px;line-height:1.7;color:#4b5563;white-space:pre-wrap;">
+${personalMessage.trim().replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+</p>
+</div>
+`
+    : "";
+
   return `
 <!DOCTYPE html>
 <html>
@@ -82,7 +102,7 @@ margin:25px 0;
 <strong>Business:</strong> ${businessName}
 </p>
 </div>
-
+${messageBlock}
 <p style="
 font-size:16px;
 line-height:1.8;

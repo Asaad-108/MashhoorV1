@@ -35,6 +35,19 @@ export type SendOutreachResult = {
 export const isPlaceholderInfluencerEmail = (email?: string) =>
   !email || /@(youtube|instagram)\.test$/i.test(email);
 
+/** True when we have a real inbox to email (not @youtube.test / @instagram.test). */
+export const hasDeliverableEmail = (email?: string) =>
+  !!email?.trim() && !isPlaceholderInfluencerEmail(email);
+
+export const resolveOutreachContactEmail = (
+  influencerEmail?: string,
+  contactEmail?: string
+): string | undefined => {
+  const contact = contactEmail?.trim();
+  if (contact) return contact;
+  if (hasDeliverableEmail(influencerEmail)) return influencerEmail!.trim();
+  return undefined;
+};
 /** True only after the influencer signed up on Mashhoor (not imported/seeded). */
 export const isRegisteredOnPlatform = (user?: { hasSignedUp?: boolean }) =>
   user?.hasSignedUp === true;

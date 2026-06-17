@@ -6,9 +6,10 @@ import { EmailInvite } from "../models/EmailInvite";
 import { AppError } from "../middleware/errorHandler";
 import {
   generateInviteToken,
-  isPlaceholderEmail,
   isRegisteredOnPlatform,
+  resolveInviteEmail,
   sendCampaignInvitationEmail,
+  shouldSendEmailInvite,
 } from "./invitationEmailService";
 import { isEmailConfigured } from "./emailService";
 import { ICampaign } from "../models/Campaign";
@@ -46,10 +47,8 @@ async function deliverInvitationEmail(params: {
     email: params.email,
   });
   if (duplicateInvite) {
-    throw new AppError(
-      "An invitation email was already sent to this address for this campaign",
-      409
-    );
+    // Instead of throwing an error, delete the old invite so we can send a new one
+    await EmailInvite.deleteOne({ _id: duplicateInvite._id });
   }
 
   await sendCampaignInvitationEmail({
@@ -62,7 +61,7 @@ async function deliverInvitationEmail(params: {
     personalMessage: params.message,
   });
 
-  return EmailInvite.create({
+  const emailInvite = await EmailInvite.create({
     campaign: params.campaignId,
     business: params.businessId,
     influencer: params.influencerId,
@@ -74,6 +73,9 @@ async function deliverInvitationEmail(params: {
     outreach: params.outreachId,
     sentAt: new Date(),
   });
+
+  console.log(`📧 Campaign invitation email queued for ${params.email} (${params.campaignTitle})`);
+  return emailInvite;
 }
 
 /**
@@ -103,7 +105,7 @@ export async function inviteInfluencerToCampaign(params: {
     throw new AppError("Not authorized", 403);
   }
 
-  const influencer = await User.findById(influencerId);
+  const influencer = await User.findById(influencerId).select("name email role hasSignedUp");
   if (!influencer || influencer.role !== "influencer") {
     throw new AppError("Influencer not found", 404);
   }
@@ -135,8 +137,9 @@ export async function inviteInfluencerToCampaign(params: {
   }
 
   const registered = isRegisteredOnPlatform(influencer);
+  const useEmail = shouldSendEmailInvite(influencer, contactEmail);
 
-  if (registered) {
+  if (registered && !useEmail) {
     await bootstrapPlatformCampaignMessaging({
       outreach,
       campaign,
@@ -170,26 +173,23 @@ export async function inviteInfluencerToCampaign(params: {
     };
   }
 
-  const emailTo = (contactEmail?.trim() || influencer.email).toLowerCase();
-  if (!emailTo || isPlaceholderEmail(emailTo)) {
+  if (!useEmail) {
     throw new AppError(
-      "This influencer is not registered on Mashhoor. Provide their contact email so we can send an invitation automatically.",
+      "This influencer is not registered on Mashhoor. Enter their real email address so we can send the invitation.",
       400
     );
   }
 
-  const existingInvite = await EmailInvite.findOne({
-    campaign: campaignId,
-    email: emailTo,
-  });
-  if (existingInvite) {
-    return {
-      channel: "email",
-      campaign,
-      outreach,
-      emailInvite: existingInvite,
-    };
+  const emailTo = resolveInviteEmail(influencer.email, contactEmail)!;
+
+  if (!isEmailConfigured()) {
+    throw new AppError(
+      "Email service is not configured. Add SMTP_LOGIN and SMTP_PASSWORD to backend/.env",
+      503
+    );
   }
+
+  console.log(`📨 Sending campaign email invite to ${emailTo} (influencer ${influencerId}, campaign ${campaignId})`);
 
   const emailInvite = await deliverInvitationEmail({
     campaignId,
@@ -202,6 +202,9 @@ export async function inviteInfluencerToCampaign(params: {
     message,
     outreachId: outreach._id,
   });
+
+  outreach.status = "sent";
+  await outreach.save();
 
   return {
     channel: "email",

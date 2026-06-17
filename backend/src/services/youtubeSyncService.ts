@@ -1,6 +1,17 @@
 import { IInfluencerProfile } from "../models/InfluencerProfile";
 import { getYouTubeApiKey } from "../config/youtube";
 
+/** Fetch with an automatic timeout (default 8 s) to avoid hanging on network issues. */
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function normalizeHandle(raw: string): string {
   let handle = raw.trim();
   if (handle.includes("youtube.com/")) {
@@ -24,13 +35,13 @@ async function fetchChannelStats(handle: string, apiKey: string): Promise<Channe
   // Use forHandle or forUsername which costs 1 quota instead of search which costs 100.
   const handleWithAt = handle.startsWith("@") ? handle : `@${handle}`;
   let statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&forHandle=${encodeURIComponent(handleWithAt)}&key=${apiKey}`;
-  let statsRes = await fetch(statsURL);
+  let statsRes = await fetchWithTimeout(statsURL);
   let statsData = (await statsRes.json()) as any;
 
   if (statsData.error || !statsData.items || statsData.items.length === 0) {
     // Fallback to forUsername if forHandle didn't work
     statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&forUsername=${encodeURIComponent(handle)}&key=${apiKey}`;
-    statsRes = await fetch(statsURL);
+    statsRes = await fetchWithTimeout(statsURL);
     statsData = await statsRes.json();
   }
 
@@ -56,7 +67,7 @@ async function fetchChannelStats(handle: string, apiKey: string): Promise<Channe
   const uploadsPlaylistId = channelData.contentDetails?.relatedPlaylists?.uploads;
   if (uploadsPlaylistId) {
     try {
-      const playlistRes = await fetch(
+      const playlistRes = await fetchWithTimeout(
         `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=1&key=${apiKey}`
       );
       const playlistData = (await playlistRes.json()) as {
@@ -113,7 +124,7 @@ export async function syncYouTubeForProfile(
   if (!stats && userEmail?.endsWith("@youtube.test")) {
     const channelId = userEmail.split("@")[0];
     const statsURL = `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet,contentDetails&id=${channelId}&key=${apiKey}`;
-    const statsRes = await fetch(statsURL);
+    const statsRes = await fetchWithTimeout(statsURL);
     const statsData = (await statsRes.json()) as {
       items?: Array<{
         statistics: Record<string, string>;

@@ -1,7 +1,10 @@
 import axios from "axios";
 
 // Use "/api" in dev so Vite proxies to the backend (see vite.config.ts). Override with VITE_API_URL in production.
-const API_BASE = import.meta.env.VITE_API_URL;
+// In dev, default to Vite proxy (/api → localhost:5001). Production sets VITE_API_URL in .env.production.
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "/api" : "/api");
 
 const isAuthEndpoint = (url?: string) =>
   !!url && (url.includes("/auth/login") || url.includes("/auth/register"));
@@ -11,6 +14,7 @@ const api = axios.create({
   baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
+  timeout: 45_000,
 });
 
 // ─── Request interceptor — attach JWT on every request ────────────────────────
@@ -95,9 +99,14 @@ api.interceptors.response.use(
     }
 
     const message =
-      (error.response?.data as { message?: string } | undefined)?.message ||
-      error.message ||
-      "Request failed";
+      error.code === "ECONNABORTED"
+        ? "Request timed out. Is the backend running on port 5001?"
+        : error.response?.status === 503
+          ? (error.response?.data as { message?: string })?.message ||
+            "Email service unavailable. Check SMTP settings on the server."
+          : (error.response?.data as { message?: string } | undefined)?.message ||
+            error.message ||
+            "Request failed";
     return Promise.reject(new Error(message));
   }
 );

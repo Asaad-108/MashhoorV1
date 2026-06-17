@@ -206,9 +206,6 @@ function CreateCampaign() {
                 >
                   <option value="">Select target region</option>
                   <option value="Pakistan">Pakistan</option>
-                  <option value="UAE">UAE</option>
-                  <option value="Saudi Arabia">Saudi Arabia</option>
-                  <option value="USA">USA</option>
                 </select>
               </div>
 
