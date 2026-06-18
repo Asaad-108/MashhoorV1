@@ -155,7 +155,28 @@ export const getInfluencers = async (
         name: { $regex: search, $options: "i" },
         role: "influencer"
       }).select("_id");
-      filter.user = { $in: matchingUsers.map((u) => u._id) };
+      const userIds = matchingUsers.map((u) => u._id);
+
+      const searchConditions = [
+        { user: { $in: userIds } },
+        { "platforms.instagram.handle": { $regex: search, $options: "i" } },
+        { "platforms.youtube.handle": { $regex: search, $options: "i" } },
+        { niche: { $regex: search, $options: "i" } },
+        { location: { $regex: search, $options: "i" } },
+        { country: { $regex: search, $options: "i" } }
+      ];
+
+      if (filter.$or) {
+        filter.$and = [
+          { $or: filter.$or as any[] },
+          { $or: searchConditions }
+        ];
+        delete filter.$or;
+      } else if (filter.$and) {
+        (filter.$and as any[]).push({ $or: searchConditions });
+      } else {
+        filter.$or = searchConditions;
+      }
     }
 
     let query = InfluencerProfile.find(filter)
@@ -398,7 +419,28 @@ export const getRecommendations = async (
         name: { $regex: search, $options: "i" },
         role: "influencer"
       }).select("_id");
-      filter.user = { $in: matchingUsers.map((u) => u._id) };
+      const userIds = matchingUsers.map((u) => u._id);
+
+      const searchConditions = [
+        { user: { $in: userIds } },
+        { "platforms.instagram.handle": { $regex: search, $options: "i" } },
+        { "platforms.youtube.handle": { $regex: search, $options: "i" } },
+        { niche: { $regex: search, $options: "i" } },
+        { location: { $regex: search, $options: "i" } },
+        { country: { $regex: search, $options: "i" } }
+      ];
+
+      if (filter.$or) {
+        filter.$and = [
+          { $or: filter.$or as any[] },
+          { $or: searchConditions }
+        ];
+        delete filter.$or;
+      } else if (filter.$and) {
+        (filter.$and as any[]).push({ $or: searchConditions });
+      } else {
+        filter.$or = searchConditions;
+      }
     }
 
     // Fetch filtered profiles to score them
