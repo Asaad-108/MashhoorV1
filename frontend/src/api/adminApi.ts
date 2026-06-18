@@ -33,4 +33,8 @@ export const adminApi = {
     const { data } = await api.put(`/admin/verifications/${id}/approve`);
     return data.data;
   },
+  rejectUser: async (id: string) => {
+    const { data } = await api.delete(`/admin/verifications/${id}/reject`);
+    return data.data;
+  },
 };

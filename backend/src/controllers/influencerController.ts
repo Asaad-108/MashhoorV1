@@ -14,6 +14,53 @@ import {
   getUnifiedPlatformMetrics,
 } from "../services/platformMetricsService";
 
+export const ALLOWED_INSTAGRAM_HANDLES = [
+  "bilalmunir1995", "xeetechcare", "minoqtopus",
+  "talhahanjum", "talhahyunus", "asimazhar", "alisethiofficial",
+  "babarazam", "ishaheenafridi10", "furqanbhatti.cricket", "saimayubb",
+  "safridiofficial", "mrizwanpak", "harisraufofficial", "inaseemshah",
+  "fakharzaman719", "realshoaibmalik", "m_hafeez8", "wasimakramliveofficial",
+  "theanonymousxd", "mrjayplays", "arslan.ash",
+  "hemayal", "ayeshabeigs", "hussain.tareen",
+  "waseembadami_official", "ganjiswag", "irfanjunejo", "flkkkk.iso",
+  "haniaheheofficial", "mahirahkhan", "ayezakhan.ak", "official_mayaali",
+  "sajalaly", "mawrellous", "yumnazaidiofficial", "wahaj.official",
+  "bilalabbas_khan", "danishtaimoor16", "muneeb_butt", "iiqraaziz",
+  "farhan_saeed", "ferozekhan", "duckybhai", "rajab.butt94", "sistrology___",
+  "shahveerjay", "umarkhan", "zaidalit", "wildlensbyabrar", "inkleftunsaid"
+];
+
+// YouTube channel names (stored as handle in platforms.youtube.handle)
+export const ALLOWED_YOUTUBE_HANDLES = [
+  // Cricket
+  "Pakistan Wheelchair Cricket Council", "Cricket With Umer Afzaal 2.0",
+  "GTV Sports", "World Sports", "cricket lover Ali",
+  "Cricket with CH WALEED RAUF", "Pakistan Cricket",
+  "CatchAndBatwithKamranAkmal", "FurqanBhatti.Cricket",
+  // Music / Entertainment
+  "Top Folk Songs", "Talented Singers Of Pakistan",
+  "ShahveerJay", "NehaalNaseem", "shehrmaindihat",
+  "GanjiSwag", "Sistrology", "DuckyBhai", "rajabbutt94",
+  // Food / Lifestyle
+  "Street Food Pakistan", "Yes In Pakistan", "WildlensbyAbrar",
+  // Fashion
+  "SAPPHIRE Pakistan", "Eastern Fashion Pakistan", "Fashion In Pakistan",
+  // Tech / Education
+  "Aptech Learning Pakistan Official", "Pak Science Club",
+  "MAS TECH",
+  // News / Politics
+  "Pakistan Time News Official", "GEO SUPER", "DawnNews English",
+  "GNN", "365 Plus", "SUNO NEWS HD",
+  // Gaming
+  "Star ANONYMOUS", "GT ESPORTS", "Garena Free Fire Pakistan",
+  "pakistani gamer", "P9 GAMING YT", "MrJayPlays",
+
+  // New Channels
+  "Video Wali Sarkar", "PakWheels", "Young Stunners", "Nadir Ali",
+  "Kaifi Khalil", "Zalmi Plays", "Ducky Reloaded", "Rana Hamza Saif",
+  "Bhadar Gang", "Ali Zafar",
+];
+
 // GET /api/influencers
 // Query params: niche, country, minFollowers, maxFollowers, minTrustScore, minEngagement, page, limit, sort
 export const getInfluencers = async (
@@ -37,53 +84,6 @@ export const getInfluencers = async (
     } = req.query as Record<string, string>;
 
     const filter: Record<string, unknown> = {};
-
-    const ALLOWED_INSTAGRAM_HANDLES = [
-      "bilalmunir1995", "xeetechcare", "minoqtopus",
-      "talhahanjum", "talhahyunus", "asimazhar", "alisethiofficial",
-      "babarazam", "ishaheenafridi10", "furqanbhatti.cricket", "saimayubb",
-      "safridiofficial", "mrizwanpak", "harisraufofficial", "inaseemshah",
-      "fakharzaman719", "realshoaibmalik", "m_hafeez8", "wasimakramliveofficial",
-      "theanonymousxd", "mrjayplays", "arslan.ash",
-      "hemayal", "ayeshabeigs", "hussain.tareen",
-      "waseembadami_official", "ganjiswag", "irfanjunejo", "flkkkk.iso",
-      "haniaheheofficial", "mahirahkhan", "ayezakhan.ak", "official_mayaali",
-      "sajalaly", "mawrellous", "yumnazaidiofficial", "wahaj.official",
-      "bilalabbas_khan", "danishtaimoor16", "muneeb_butt", "iiqraaziz",
-      "farhan_saeed", "ferozekhan", "duckybhai", "rajab.butt94", "sistrology___",
-      "shahveerjay", "umarkhan", "zaidalit", "wildlensbyabrar", "inkleftunsaid"
-    ];
-
-    // YouTube channel names (stored as handle in platforms.youtube.handle)
-    const ALLOWED_YOUTUBE_HANDLES = [
-      // Cricket
-      "Pakistan Wheelchair Cricket Council", "Cricket With Umer Afzaal 2.0",
-      "GTV Sports", "World Sports", "cricket lover Ali",
-      "Cricket with CH WALEED RAUF", "Pakistan Cricket",
-      "CatchAndBatwithKamranAkmal", "FurqanBhatti.Cricket",
-      // Music / Entertainment
-      "Top Folk Songs", "Talented Singers Of Pakistan",
-      "ShahveerJay", "NehaalNaseem", "shehrmaindihat",
-      "GanjiSwag", "Sistrology", "DuckyBhai", "rajabbutt94",
-      // Food / Lifestyle
-      "Street Food Pakistan", "Yes In Pakistan", "WildlensbyAbrar",
-      // Fashion
-      "SAPPHIRE Pakistan", "Eastern Fashion Pakistan", "Fashion In Pakistan",
-      // Tech / Education
-      "Aptech Learning Pakistan Official", "Pak Science Club",
-      "MAS TECH",
-      // News / Politics
-      "Pakistan Time News Official", "GEO SUPER", "DawnNews English",
-      "GNN", "365 Plus", "SUNO NEWS HD",
-      // Gaming
-      "Star ANONYMOUS", "GT ESPORTS", "Garena Free Fire Pakistan",
-      "pakistani gamer", "P9 GAMING YT", "MrJayPlays",
-
-      // New Channels
-      "Video Wali Sarkar", "PakWheels", "Young Stunners", "Nadir Ali",
-      "Kaifi Khalil", "Zalmi Plays", "Ducky Reloaded", "Rana Hamza Saif",
-      "Bhadar Gang", "Ali Zafar",
-    ];
 
     // Find all users who signed up directly as influencers on the platform
     const signedUpUserDocs = await User.find({ role: "influencer", hasSignedUp: true }).select("_id");

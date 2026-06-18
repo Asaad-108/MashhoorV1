@@ -31,6 +31,16 @@ function VerificationDashboard() {
     }
   };
 
+  const handleReject = async (id: string) => {
+    if (!window.confirm("Are you sure you want to reject and delete this user?")) return;
+    try {
+      await adminApi.rejectUser(id);
+      fetchVerifications();
+    } catch (err) {
+      alert("Failed to reject user");
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center text-gray-500">Loading verifications...</div>;
   }
@@ -86,7 +96,10 @@ function VerificationDashboard() {
                   >
                     Approve
                   </button>
-                  <button className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors">
+                  <button 
+                    onClick={() => handleReject(user._id)}
+                    className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
+                  >
                     Reject
                   </button>
                 </div>

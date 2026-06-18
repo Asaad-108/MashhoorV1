@@ -2,6 +2,8 @@ import { Response, NextFunction } from "express";
 import { User } from "../models/User";
 import { Campaign } from "../models/Campaign";
 import { Outreach } from "../models/Outreach";
+import { InfluencerProfile } from "../models/InfluencerProfile";
+import { ALLOWED_INSTAGRAM_HANDLES, ALLOWED_YOUTUBE_HANDLES } from "./influencerController";
 import { AuthRequest } from "../types";
 
 // GET /api/admin/stats
@@ -12,8 +14,23 @@ export const getAdminStats = async (
 ): Promise<void> => {
   try {
     void req;
+
+    const signedUpUserDocs = await User.find({ role: "influencer", hasSignedUp: true }).select("_id");
+    const signedUpUserIds = signedUpUserDocs.map(doc => doc._id);
+
+    const influencerFilter = {
+      $or: [
+        { "platforms.instagram.handle": { $in: ALLOWED_INSTAGRAM_HANDLES } },
+        { "platforms.youtube.handle": { $in: ALLOWED_YOUTUBE_HANDLES } },
+        { user: { $in: signedUpUserIds } },
+      ],
+    };
+
+    const activeProfiles = await InfluencerProfile.find(influencerFilter).select("user");
+    const activeInfluencerUserIds = activeProfiles.map(p => p.user).filter(Boolean);
+    const totalInfluencers = activeInfluencerUserIds.length;
+
     const [
-      totalInfluencers,
       totalBusinesses,
       totalCampaigns,
       activeCampaigns,
@@ -23,11 +40,10 @@ export const getAdminStats = async (
       recentUsers,
       recentCampaigns,
     ] = await Promise.all([
-      User.countDocuments({ role: "influencer" }),
       User.countDocuments({ role: "business" }),
       Campaign.countDocuments(),
       Campaign.countDocuments({ status: "active" }),
-      User.countDocuments({ role: "influencer", isVerified: false }),
+      User.countDocuments({ _id: { $in: activeInfluencerUserIds }, isVerified: false }),
       Outreach.countDocuments(),
       Outreach.countDocuments({ status: "pending" }),
       User.find()
@@ -160,3 +176,34 @@ export const verifyUser = async (
     next(err);
   }
 };
+
+// DELETE /api/admin/verifications/:id/reject
+export const rejectUser = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
+    }
+
+    if (user.role === "influencer") {
+      await InfluencerProfile.deleteOne({ user: userId });
+    }
+
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: "User rejected and deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
