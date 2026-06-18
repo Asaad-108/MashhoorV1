@@ -125,6 +125,7 @@ export type Conversation = {
   lastMessageAt?: string;
   unreadCount: Record<string, number>;
   directChatActive?: boolean;
+  archived?: boolean;
 };
 
 export const messageApi = {

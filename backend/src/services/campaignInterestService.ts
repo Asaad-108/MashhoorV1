@@ -118,7 +118,38 @@ export async function handleInfluencerMessageForInterest(params: {
       return;
     }
 
-    if (isInterestedReply(content)) {
+    // 1. Fetch past messages of this influencer
+    const priorMsgs = await Message.find({
+      campaign: convo.campaign,
+      sender: influencerId,
+    }).select("content");
+
+    let sumScore = 0;
+    let count = 0;
+    for (const msg of priorMsgs) {
+      const s = analyzeSentiment(msg.content);
+      if (s.label === "positive") sumScore += s.score;
+      else if (s.label === "negative") sumScore -= s.score;
+      count++;
+    }
+    const averagePastSentiment = count > 0 ? sumScore / count : 0.0;
+
+    // 2. Current response sentiment
+    const currentSentiment = analyzeSentiment(content);
+    let currentScore = 0.0;
+    const isYes = isInterestedReply(content);
+    const isNo = currentSentiment.label === "negative" || ["no", "nope", "not interested", "decline", "reject", "pass", "no thanks"].some(w => content.toLowerCase().includes(w));
+    
+    if (isYes) {
+      currentScore = 1.0;
+    } else if (isNo) {
+      currentScore = -1.0;
+    }
+
+    // 3. Combined score (25% history, 75% current reply)
+    const finalInterestScore = (0.25 * averagePastSentiment) + (0.75 * currentScore);
+
+    if (finalInterestScore > 0.15) {
       if (convo.outreach) {
         const outreach = await Outreach.findById(convo.outreach);
         if (outreach) {
@@ -170,6 +201,22 @@ export async function handleInfluencerMessageForInterest(params: {
         convo.interestCheckAt = undefined;
         enableDirectChatOnConversation(convo);
       }
+    } else if (finalInterestScore < -0.15) {
+      convo.archived = true;
+      convo.interestPromptSentInCycle = false;
+      convo.interestCheckAt = undefined;
+
+      const closingMsgText = "No problem! We've archived this conversation. Let us know if you change your mind in the future.";
+      await Message.create({
+        receiver: influencerId,
+        campaign: convo.campaign,
+        outreach: convo.outreach,
+        content: closingMsgText,
+        messageType: "direct",
+      });
+
+      convo.lastMessage = closingMsgText.slice(0, 160);
+      convo.lastMessageAt = new Date();
     }
   } else {
     scheduleInterestCheck(convo);

@@ -10,6 +10,7 @@ export type CampaignRecord = {
   campaign_end_date: string;
   campaign_objective: string;
   influencer_task: string;
+  influencer_requirements: string;
 };
 
 const SCHEMA_KEYWORDS: Record<keyof CampaignRecord, string[]> = {
@@ -19,7 +20,8 @@ const SCHEMA_KEYWORDS: Record<keyof CampaignRecord, string[]> = {
   target_region: ["region", "location", "where", "country", "city", "pakistan"],
   target_niche: ["niche", "category", "type of content", "audience"],
   campaign_description: ["describe", "summary", "brief", "about", "overview", "product"],
-  influencer_task: ["do", "task", "deliverable", "role", "expected", "work", "requirements"],
+  influencer_task: ["do", "task", "deliverable", "deliverables", "role", "expected", "work"],
+  influencer_requirements: ["requirement", "requirements", "criteria", "follower", "followers", "trust", "score"],
   campaign_name: ["campaign", "name", "title"],
   campaign_objective: ["objective", "goal", "purpose", "metrics"],
 };
@@ -56,14 +58,16 @@ export function campaignToRecord(campaign: ICampaign, businessName?: string): Ca
     : "Pakistan";
 
   const reqs = campaign.requirements;
+  
   const taskParts: string[] = [];
   if (reqs?.contentType?.length) taskParts.push(`Content: ${reqs.contentType.join(", ")}`);
   if (reqs?.platforms?.length) taskParts.push(`Platforms: ${reqs.platforms.join(", ")}`);
-  if (reqs?.minFollowers) taskParts.push(`Min followers: ${reqs.minFollowers}`);
-  const influencer_task =
-    taskParts.length > 0
-      ? taskParts.join(". ")
-      : "Create and publish campaign content as agreed with the brand.";
+  const influencer_task = taskParts.length > 0 ? taskParts.join(". ") : "N/A";
+
+  const reqParts: string[] = [];
+  if (reqs?.minFollowers) reqParts.push(`Min followers: ${reqs.minFollowers}`);
+  if (reqs?.minTrustScore) reqParts.push(`Min trust score: ${reqs.minTrustScore}%`);
+  const influencer_requirements = reqParts.length > 0 ? reqParts.join(". ") : "N/A";
 
   return {
     campaign_name: campaign.title,
@@ -75,6 +79,7 @@ export function campaignToRecord(campaign: ICampaign, businessName?: string): Ca
     campaign_end_date: end,
     campaign_objective: campaign.goals || `Brand collaboration managed by ${businessName || "the business"}.`,
     influencer_task,
+    influencer_requirements,
   };
 }
 
@@ -116,44 +121,90 @@ function pickTopField(input: string): { field: keyof CampaignRecord; score: numb
   return { field: best, score: bestScore };
 }
 
-function buildFacts(input: string, record: CampaignRecord): string[] {
+function buildFacts(input: string, record: CampaignRecord): { facts: string[]; missing: string[] } {
   const facts: string[] = [];
-  const add = (label: string, value: string) => {
-    if (value && value !== "N/A") facts.push(`${label}: ${value}`);
-  };
+  const missing: string[] = [];
 
-  if (["budget", "pay", "cost", "money", "fee"].some((w) => input.includes(w))) {
-    add("Campaign Budget", record.campaign_budget);
-  }
-  if (["start", "begin", "launch"].some((w) => input.includes(w))) {
-    add("Start Date", record.campaign_start_date);
-  }
-  if (["end", "finish", "deadline"].some((w) => input.includes(w))) {
-    add("End Date", record.campaign_end_date);
-  }
-  if (["region", "location", "where", "country"].some((w) => input.includes(w))) {
-    add("Target Region", record.target_region);
-  }
-  if (["niche", "category"].some((w) => input.includes(w))) {
-    add("Content Niche", record.target_niche);
-  }
-  if (
-    ["task", "deliverable", "do", "expected", "role", "work"].some((w) => input.includes(w))
-  ) {
-    add("Your Deliverables", record.influencer_task);
-  }
-  if (["objective", "goal", "purpose"].some((w) => input.includes(w))) {
-    add("Campaign Objectives", record.campaign_objective);
+  const askedBudget = ["budget", "pay", "cost", "money", "fee", "compensation", "payment"].some((w) => input.includes(w));
+  const askedDates = ["start", "begin", "launch", "starting", "end", "finish", "deadline", "conclude", "ending", "date", "dates", "timeline", "schedule", "when"].some((w) => input.includes(w));
+  const askedRegion = ["region", "location", "where", "country", "city"].some((w) => input.includes(w));
+  const askedNiche = ["niche", "category", "type of content", "audience"].some((w) => input.includes(w));
+  const askedTask = ["task", "deliverable", "deliverables", "do", "expected", "role", "work"].some((w) => input.includes(w));
+  const askedReqs = ["requirement", "requirements", "criteria", "follower", "followers", "trust", "score"].some((w) => input.includes(w));
+  const askedObjective = ["objective", "goal", "purpose", "metrics"].some((w) => input.includes(w));
+  const askedAbout = ["about", "describe", "summary", "brief", "overview", "product"].some((w) => input.includes(w));
+
+  if (askedBudget) {
+    if (record.campaign_budget && record.campaign_budget !== "N/A" && record.campaign_budget !== "0") {
+      facts.push(`The budget for this campaign is ${record.campaign_budget}.`);
+    } else {
+      missing.push("budget");
+    }
   }
 
-  if (
-    ["about", "describe", "summary", "brief", "overview"].some((w) => input.includes(w)) ||
-    facts.length === 0
-  ) {
-    add("Campaign Overview", record.campaign_description);
+  if (askedDates) {
+    const hasStart = record.campaign_start_date && record.campaign_start_date !== "N/A";
+    const hasEnd = record.campaign_end_date && record.campaign_end_date !== "N/A";
+    if (hasStart && hasEnd) {
+      facts.push(`The campaign is scheduled to run from ${record.campaign_start_date} to ${record.campaign_end_date}.`);
+    } else if (hasStart) {
+      facts.push(`It is scheduled to start on ${record.campaign_start_date}.`);
+    } else if (hasEnd) {
+      facts.push(`The campaign will wrap up by ${record.campaign_end_date}.`);
+    } else {
+      missing.push("dates");
+    }
   }
 
-  return facts;
+  if (askedRegion) {
+    if (record.target_region && record.target_region !== "N/A") {
+      facts.push(`The target region for this campaign is ${record.target_region}.`);
+    } else {
+      missing.push("target region");
+    }
+  }
+
+  if (askedNiche) {
+    if (record.target_niche && record.target_niche !== "N/A") {
+      facts.push(`The content niche for this campaign is ${record.target_niche}.`);
+    } else {
+      missing.push("content niche");
+    }
+  }
+
+  if (askedTask) {
+    if (record.influencer_task && record.influencer_task !== "N/A") {
+      facts.push(`Your expected deliverables are: ${record.influencer_task}.`);
+    } else {
+      missing.push("deliverables");
+    }
+  }
+
+  if (askedReqs) {
+    if (record.influencer_requirements && record.influencer_requirements !== "N/A") {
+      facts.push(`The campaign requirements are: ${record.influencer_requirements}.`);
+    } else {
+      missing.push("requirements");
+    }
+  }
+
+  if (askedObjective) {
+    if (record.campaign_objective && record.campaign_objective !== "N/A") {
+      facts.push(`The campaign objective is: ${record.campaign_objective}.`);
+    } else {
+      missing.push("objective");
+    }
+  }
+
+  if (facts.length === 0 && (askedAbout || missing.length === 0)) {
+    if (record.campaign_description && record.campaign_description !== "N/A") {
+      facts.push(`Here is a quick overview of the campaign: ${record.campaign_description}`);
+    } else {
+      facts.push(`This is the "${record.campaign_name}" campaign.`);
+    }
+  }
+
+  return { facts, missing };
 }
 
 function runLocalPipeline(
@@ -170,13 +221,13 @@ function runLocalPipeline(
   if (acks.includes(cleaned)) {
     return {
       reply:
-        "Understood. Ask me anything about this campaign's budget, timeline, location, niche, or deliverables.",
+        "Understood! Please let me know if you have any questions about the campaign budget, timeline, target region, content niche, or deliverables. I'm here to help!",
     };
   }
 
   if (["hi", "hello", "hey", "aoa", "salam", "hy"].some((g) => cleaned === g || cleaned.startsWith(g + " "))) {
     return {
-      reply: `Hello! I'm the Mashhoor assistant for "${record.campaign_name}". I can answer questions about the budget, schedule, target region, content niche, and what's expected from you. Please ask if you have any question related to the campaign.`,
+      reply: `Hi there! I'm the Mashhoor assistant for the "${record.campaign_name}" campaign. I can help answer any questions you have regarding the budget, timeline, target region, niche, or expected deliverables. What would you like to know?`,
     };
   }
 
@@ -185,29 +236,34 @@ function runLocalPipeline(
 
   if (relevance < 0.22 && score < 0.2) {
     return {
-      reply: `I'm specialized in the "${record.campaign_name}" campaign only — budget, timeline, location, niche, and deliverables. Please ask if you have any question related to the campaign.`,
+      reply: `I can only help with questions related to the "${record.campaign_name}" campaign, such as its budget, timeline, niche, or deliverables. Let me know if you have any questions about those!`,
       trace: "Out-Of-Scope Guardrail Triggered",
     };
   }
 
-  const value = record[field];
-  if (!value || value === "N/A") {
-    const readable = field.replace(/_/g, " ");
+  const { facts, missing } = buildFacts(cleaned, record);
+
+  if (missing.length > 0 && facts.length === 0) {
+    const readable = missing.join(", ");
+    if (missing.includes("deliverables") || missing.includes("requirements")) {
+      return {
+        reply: `I don't have details about the campaign deliverables or requirements on file right now. Would you like to start a real-time chat with the brand to discuss these? Are you interested?`,
+        trace: `Missing: ${readable}`,
+      };
+    }
     return {
-      reply: `I don't have the specific ${readable} on file yet. Please ask if you have any question related to the campaign.`,
-      trace: "Missing Data Gate Triggered",
+      reply: `I don't have the details for the campaign ${readable} on file at the moment. Let me know if you have other questions!`,
+      trace: `Missing: ${readable}`,
     };
   }
 
-  const facts = buildFacts(cleaned, record);
-  const historyNote =
-    chatHistory.length > 0
-      ? ` (Continuing our conversation about ${record.campaign_name}.)`
-      : "";
-
   const factText = facts.join(" ");
+  const closingText = chatHistory.length > 0
+    ? ` Let me know if you need details on any other aspect of "${record.campaign_name}"!`
+    : ` Let me know if you have any other questions about the campaign!`;
+
   return {
-    reply: `${factText}${historyNote} Please ask if you have any question related to the campaign.`,
+    reply: `${factText}${closingText}`,
     trace: `Matched: ${field}`,
   };
 }
@@ -221,7 +277,7 @@ export async function generateAssistantWelcome(
     `Hi! You've been invited to collaborate on "${record.campaign_name}" by ${businessName || "a brand"} on Mashhoor. ` +
     `I'm your campaign assistant — ask me about the budget (${record.campaign_budget}), timeline (${record.campaign_start_date} – ${record.campaign_end_date}), ` +
     `target region (${record.target_region}), niche (${record.target_niche}), or what you need to deliver. ` +
-    `Please ask if you have any question related to the campaign.`
+    `Feel free to ask me any questions you have about this campaign!`
   );
 }
 

@@ -26,6 +26,7 @@ function Messages() {
   const [loading, setLoading] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
+  const [activeTab, setActiveTab] = useState<"all" | "interested" | "archive">("all");
 
   const loadConversations = useCallback(async () => {
     try {
@@ -86,7 +87,19 @@ function Messages() {
 
   const filtered = conversations.filter((c) => {
     const name = c.participants.find((p) => p._id !== user?._id)?.name ?? "";
-    return name.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = name.toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (activeTab === "all") {
+      return !c.archived;
+    }
+    if (activeTab === "interested") {
+      return c.directChatActive && !c.archived;
+    }
+    if (activeTab === "archive") {
+      return !!c.archived;
+    }
+    return true;
   });
 
   const handleSend = async () => {
@@ -128,7 +141,7 @@ function Messages() {
     <div className="messages-page">
       <div className="flex flex-1 overflow-hidden p-6 gap-6 min-h-[75vh]">
         <div className="w-1/3 bg-white rounded-2xl border border-gray-200 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
+          <div className="p-4 border-b border-gray-100 flex flex-col gap-3">
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 <img src="/assets/search.svg" alt="" width={18} height={18} />
@@ -140,6 +153,39 @@ function Messages() {
                 placeholder="Search conversations..."
                 className="w-full bg-gray-50 rounded-lg py-2 pl-10 pr-4 text-sm outline-none focus:border-purple-500 border border-transparent"
               />
+            </div>
+
+            <div className="flex bg-gray-50 rounded-lg p-0.5 border border-gray-200/50">
+              <button
+                onClick={() => setActiveTab("all")}
+                className={`flex-1 py-1.5 text-center text-xs font-semibold rounded-md transition-all ${
+                  activeTab === "all"
+                    ? "bg-white text-purple-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setActiveTab("interested")}
+                className={`flex-1 py-1.5 text-center text-xs font-semibold rounded-md transition-all ${
+                  activeTab === "interested"
+                    ? "bg-white text-purple-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                Interested
+              </button>
+              <button
+                onClick={() => setActiveTab("archive")}
+                className={`flex-1 py-1.5 text-center text-xs font-semibold rounded-md transition-all ${
+                  activeTab === "archive"
+                    ? "bg-white text-purple-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                Archive
+              </button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">

@@ -36,6 +36,7 @@ export interface IConversation extends Document {
   businessNotifiedInterested?: boolean;
   /** After interest handoff — only direct messages between brand and influencer. */
   directChatActive?: boolean;
+  archived?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -83,6 +84,7 @@ const ConversationSchema = new Schema<IConversation>(
     lastCampaignChatAt: Date,
     businessNotifiedInterested: { type: Boolean, default: false },
     directChatActive: { type: Boolean, default: false },
+    archived: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

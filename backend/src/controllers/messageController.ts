@@ -309,7 +309,12 @@ export const askCampaignAssistant = async (
 
     convo.lastMessage = reply.slice(0, 160);
     convo.lastMessageAt = new Date();
-    scheduleInterestCheck(convo);
+    if (reply.includes("Are you interested?")) {
+      convo.interestPromptSentInCycle = true;
+      convo.interestCheckAt = undefined;
+    } else {
+      scheduleInterestCheck(convo);
+    }
     await convo.save();
 
     await handleInfluencerMessageForInterest({
