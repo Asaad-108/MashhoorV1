@@ -51,9 +51,12 @@ export const getReports = async (
       .populate("reportedBy", "name email")
       .sort({ createdAt: -1 });
 
+    // Filter out reports where the reported user no longer exists
+    const validReports = reports.filter((r) => r.reportedUser !== null);
+
     res.status(200).json({
       success: true,
-      data: reports,
+      data: validReports,
     });
   } catch (err) {
     next(err);

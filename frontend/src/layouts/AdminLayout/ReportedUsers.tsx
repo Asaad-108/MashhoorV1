@@ -67,10 +67,10 @@ function ReportedUsers() {
               <div className="p-8 flex-1">
                  <div className="flex items-center justify-between mb-8">
                     <div className="flex items-center gap-5">
-                      <img src={report.reportedUser.avatar || "https://via.placeholder.com/100"} alt={report.reportedUser.name} className="w-16 h-16 rounded-2xl object-cover shadow-sm" />
+                      <img src={report.reportedUser?.avatar || "https://via.placeholder.com/100"} alt={report.reportedUser?.name || "Deleted User"} className="w-16 h-16 rounded-2xl object-cover shadow-sm" />
                       <div>
                          <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-xl font-bold text-gray-900">{report.reportedUser.name}</h3>
+                            <h3 className="text-xl font-bold text-gray-900">{report.reportedUser?.name || "Deleted User"}</h3>
                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
                               report.priority === 'high' ? 'bg-red-50 text-red-500' : report.priority === 'medium' ? 'bg-yellow-50 text-yellow-600' : 'bg-blue-50 text-blue-600'
                             }`}>
@@ -83,7 +83,7 @@ function ReportedUsers() {
                             </span>
                          </div>
                          <div className="text-gray-400 text-sm font-medium">
-                            Reported by <span className="text-gray-900">{report.reportedBy.name}</span> • {new Date(report.createdAt).toLocaleDateString()}
+                            Reported by <span className="text-gray-900">{report.reportedBy?.name || "System"}</span> • {new Date(report.createdAt).toLocaleDateString()}
                          </div>
                       </div>
                     </div>
