@@ -9,7 +9,6 @@ type InfluencerCardProps = {
   followers: string;
   engagement: string;
   trustScore: number;
-  systemCategory?: string;
   onContact?: () => void;
 };
 
@@ -22,7 +21,6 @@ function InfluencerCard({
   followers,
   engagement,
   trustScore,
-  systemCategory,
   onContact,
 }: InfluencerCardProps) {
   const navigate = useNavigate();

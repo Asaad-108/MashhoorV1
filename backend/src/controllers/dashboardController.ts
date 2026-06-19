@@ -9,6 +9,7 @@ import { calculateTrustScore } from "../services/trustScoreService";
 import { syncYouTubeForProfile } from "../services/youtubeSyncService";
 import { getUnifiedPlatformMetrics } from "../services/platformMetricsService";
 import { Notification } from "../models/Notification";
+import { calculateCampaignProgress } from "../utils/campaignHelpers";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -200,10 +201,23 @@ export const getBusinessDashboardStats = async (
     });
 
     // Recent campaigns for dashboard list
-    const recentCampaignsList = await Campaign.find({ business: businessId })
+    const rawRecentCampaignsList = await Campaign.find({ business: businessId })
       .sort({ createdAt: -1 })
       .limit(5)
-      .select("title status createdAt budget progress");
+      .select("title status createdAt budget progress timeline");
+
+    const recentCampaignsList = await Promise.all(
+      rawRecentCampaignsList.map(async (c) => {
+        if (c.timeline && c.timeline.startDate && c.timeline.endDate) {
+          const progress = calculateCampaignProgress(c.timeline.startDate, c.timeline.endDate);
+          if (c.progress !== progress) {
+            c.progress = progress;
+            await Campaign.updateOne({ _id: c._id }, { $set: { progress } });
+          }
+        }
+        return c;
+      })
+    );
 
     // Recent Activity (Campaign creations and Outreaches)
     const recentCampaigns = recentCampaignsList.slice(0, 2);
@@ -293,7 +307,7 @@ export const getBusinessDashboardStats = async (
     // Engagement Trend
     const outreachesLast6Months = await Outreach.find({
       business: businessId,
-      status: { $in: ["accepted", "replied"] },
+      status: { $in: ["sent", "opened", "replied", "accepted"] },
       updatedAt: { $gte: sixMonthsAgo },
     }).populate("influencer", "_id");
 
@@ -331,10 +345,12 @@ export const getBusinessDashboardStats = async (
             ? inf._id.toString()
             : (inf as mongoose.Types.ObjectId)?.toString?.() ?? "";
         const rate = engagementMap.get(infId) || 0;
-        monthTotal += rate;
-        monthCount++;
-        totalEngagement += rate;
-        engagementCount++;
+        if (rate > 0) {
+          monthTotal += rate;
+          monthCount++;
+          totalEngagement += rate;
+          engagementCount++;
+        }
       });
 
       return {

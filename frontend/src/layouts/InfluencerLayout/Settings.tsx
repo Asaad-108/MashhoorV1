@@ -91,6 +91,23 @@ function Settings() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    const isConfirmed = window.confirm(
+      "Are you absolutely sure you want to permanently delete your account? This action cannot be undone."
+    );
+    if (!isConfirmed) return;
+
+    try {
+      await authApi.deleteAccount();
+      logout();
+      navigate("/login");
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err?.response?.data?.message || err?.message || "Failed to delete account";
+      setError(errMsg);
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-[#f9fafb] min-h-screen p-8 flex justify-center items-center">
@@ -120,37 +137,6 @@ function Settings() {
             {error}
           </div>
         )}
-
-        <div className="bg-white border border-gray-200 max-w-4xl mx-auto rounded-xl p-8 mb-6 shadow-sm">
-          <h2 className="text-lg font-medium text-gray-900 mb-6">
-            Profile Photo
-          </h2>
-          <div className="flex items-center gap-6">
-            <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-gray-100">
-              <img
-                src={user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=8b5cf6&color=fff`}
-                alt="Profile"
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-
-            <div>
-              <button className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-medium flex items-center gap-2 mb-2 transition-colors">
-                <img
-                  src="/assets/upload.svg"
-                  alt="Upload"
-                  width={20}
-                  height={20}
-                />
-                Upload New Photo
-              </button>
-              <div className="text-gray-400 text-sm">
-                JPG, PNG or GIF, max 5MB
-              </div>
-            </div>
-          </div>
-        </div>
 
         <div className="bg-white max-w-4xl mx-auto border border-gray-200 rounded-xl p-8 mb-6 shadow-sm">
           <h2 className="text-lg font-medium text-gray-900 mb-6">
@@ -304,8 +290,7 @@ function Settings() {
         <div className="danger-card max-w-4xl mx-auto mb-8">
           <h2 className="danger-text">Danger Zone</h2>
 
-          <button className="btn-danger-outline">Deactivate Account</button>
-          <button className="btn-danger-outline">
+          <button onClick={handleDeleteAccount} className="btn-danger-outline">
             Delete Account Permanently
           </button>
         </div>

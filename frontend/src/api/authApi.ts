@@ -69,4 +69,14 @@ export const authApi = {
     const { data } = await api.post("/auth/reset-password", { token, password });
     return data.message as string;
   },
+
+  updatePassword: async (currentPassword: string, newPassword: string): Promise<string> => {
+    const { data } = await api.put("/auth/change-password", { currentPassword, newPassword });
+    return data.message as string;
+  },
+
+  deleteAccount: async (): Promise<string> => {
+    const { data } = await api.delete("/auth/account");
+    return data.message as string;
+  },
 };

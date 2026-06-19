@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { messageApi, type Conversation, type Message } from "../../api/outreachApi";
 import { mergeMessagesById } from "../../utils/messageMerge";
@@ -27,6 +27,17 @@ function Messages() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "interested" | "archive">("all");
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -65,6 +76,7 @@ function Messages() {
   useEffect(() => {
     if (!activeId) return;
     const interval = setInterval(() => {
+      if (sendingRef.current) return;
       refreshMessages(activeId);
       messageApi.getConversations().then(setConversations).catch(console.error);
     }, 5000);
@@ -103,16 +115,39 @@ function Messages() {
   });
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !influencer?._id || sending) return;
+    if (!newMessage.trim() || !influencer?._id || sendingRef.current) return;
+    const content = newMessage.trim();
+    setNewMessage("");
+    sendingRef.current = true;
     setSending(true);
+
+    const tempUserMsg: Message = {
+      _id: `temp-user-${Date.now()}`,
+      content: content,
+      messageType: "direct",
+      sender: {
+        _id: user?._id || "",
+        name: user?.name || "Me",
+        role: "business",
+      },
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, tempUserMsg]);
+
     try {
-      const msg = await messageApi.send(influencer._id, newMessage.trim(), campaignId);
-      setMessages((prev) => mergeMessagesById(prev, [msg]));
+      const msg = await messageApi.send(influencer._id, content, campaignId);
+      setMessages((prev) => {
+        const base = prev.filter((m) => !m._id.startsWith("temp-"));
+        return mergeMessagesById(base, [msg]);
+      });
       window.dispatchEvent(new Event("messages_updated"));
-      setNewMessage("");
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to send");
+      setMessages((prev) => prev.filter((m) => !m._id.startsWith("temp-")));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -298,7 +333,15 @@ function Messages() {
                             </div>
                           )}
                           <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                            {msg.content}
+                            {msg.content === "..." ? (
+                              <span className="flex gap-1.5 items-center py-1">
+                                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse" />
+                                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse [animation-delay:0.2s]" />
+                                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse [animation-delay:0.4s]" />
+                              </span>
+                            ) : (
+                              msg.content
+                            )}
                           </p>
                           <div
                             className={`text-xs mt-1 ${
@@ -312,6 +355,7 @@ function Messages() {
                     );
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               <div className="p-4 border-t border-gray-100">

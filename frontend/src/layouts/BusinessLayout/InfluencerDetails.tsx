@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/client";
 import { campaignApi } from "../../api/campaignApi";
 import type { Campaign } from "../../api/campaignApi";
-import { isPlaceholderInfluencerEmail, isRegisteredOnPlatform, hasDeliverableEmail, resolveOutreachContactEmail } from "../../api/outreachApi";
+import { isRegisteredOnPlatform, hasDeliverableEmail, resolveOutreachContactEmail } from "../../api/outreachApi";
 import { influencerApi } from "../../api/influencerApi";
 import type { ROIPredictionResult } from "../../api/influencerApi";
 import { reportApi } from "../../api/reportApi";

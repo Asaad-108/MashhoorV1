@@ -41,6 +41,32 @@ function CreateCampaign() {
       setError("Please fill out all required fields.");
       return;
     }
+
+    const parseDateString = (dateStr: string) => {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    };
+
+    const start = parseDateString(startDate);
+    const end = parseDateString(endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (start < today) {
+      setError("Start date must be today or in the future.");
+      return;
+    }
+
+    if (start.getTime() === end.getTime()) {
+      setError("End date cannot be the same as the start date.");
+      return;
+    }
+
+    if (end < start) {
+      setError("End date must be after the start date.");
+      return;
+    }
+
     setError("");
     setIsSubmitting(true);
 

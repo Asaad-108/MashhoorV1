@@ -19,6 +19,11 @@ function AccountSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
   useEffect(() => {
     if (user) {
       const parts = user.name.split(" ");
@@ -57,9 +62,56 @@ function AccountSettings() {
     }
   };
 
+  const handleUpdatePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showToast("All password fields are required", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast("New passwords do not match", "error");
+      return;
+    }
+    if (newPassword.length < 8) {
+      showToast("New password must be at least 8 characters long", "error");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      await authApi.updatePassword(currentPassword, newPassword);
+      showToast("Password updated successfully!", "success");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err?.response?.data?.message || err?.message || "Failed to update password";
+      showToast(errMsg, "error");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/login");
+  };
+
+  const handleDeleteAccount = async () => {
+    const isConfirmed = window.confirm(
+      "Are you absolutely sure you want to permanently delete your account? This action cannot be undone."
+    );
+    if (!isConfirmed) return;
+
+    try {
+      await authApi.deleteAccount();
+      logout();
+      navigate("/login");
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err?.response?.data?.message || err?.message || "Failed to delete account";
+      showToast(errMsg, "error");
+    }
   };
 
   return (
@@ -114,7 +166,7 @@ function AccountSettings() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="settings-input"
-                placeholder="+971 50 123 4567"
+                placeholder="+92 333 1234567"
               />
             </div>
           </div>
@@ -135,6 +187,8 @@ function AccountSettings() {
               <input
                 type="password"
                 placeholder="Enter current password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
                 className="settings-input"
               />
             </div>
@@ -144,6 +198,8 @@ function AccountSettings() {
               <input
                 type="password"
                 placeholder="Enter new password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
                 className="settings-input"
               />
             </div>
@@ -153,11 +209,19 @@ function AccountSettings() {
               <input
                 type="password"
                 placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 className="settings-input"
               />
             </div>
 
-            <button className="btn-update-pass">Update Password</button>
+            <button 
+              onClick={handleUpdatePassword} 
+              disabled={isUpdatingPassword}
+              className="btn-update-pass"
+            >
+              {isUpdatingPassword ? "Updating..." : "Update Password"}
+            </button>
           </div>
 
           <div className="settings-section-card">
@@ -207,8 +271,7 @@ function AccountSettings() {
           <div className="danger-card">
             <h2 className="danger-text">Danger Zone</h2>
 
-            <button className="btn-danger-outline">Deactivate Account</button>
-            <button className="btn-danger-outline">
+            <button onClick={handleDeleteAccount} className="btn-danger-outline">
               Delete Account Permanently
             </button>
           </div>
@@ -218,8 +281,8 @@ function AccountSettings() {
               <img src="/assets/save.svg" alt="Save" width={20} height={20} />
               {isSaving ? "Saving..." : "Save All Changes"}
             </button>
-            <button 
-              onClick={handleLogout} 
+            <button
+              onClick={handleLogout}
               className="w-full py-3 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 transition-colors border border-red-200"
             >
               Log Out
@@ -230,9 +293,8 @@ function AccountSettings() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 transform transition-all duration-300 ${
-          toast.type === "success" ? "bg-gray-900 text-green-400" : "bg-red-600 text-white"
-        }`}>
+        <div className={`fixed bottom-6 right-6 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 transform transition-all duration-300 ${toast.type === "success" ? "bg-gray-900 text-green-400" : "bg-red-600 text-white"
+          }`}>
           {toast.type === "success" ? (
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

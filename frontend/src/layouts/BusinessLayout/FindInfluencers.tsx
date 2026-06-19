@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { InfluencerCard } from "../../components";
 import { useInfluencers } from "../../hooks/useInfluencers";
-import { campaignApi, isPlaceholderInfluencerEmail, isRegisteredOnPlatform, hasDeliverableEmail, resolveOutreachContactEmail, influencerApi, type Campaign } from "../../api";
+import { campaignApi, isRegisteredOnPlatform, hasDeliverableEmail, resolveOutreachContactEmail, influencerApi, type Campaign } from "../../api";
 import type { InfluencerProfile } from "../../api/influencerApi";
 
 const NICHES = ["Politics", "Entertainment", "Gaming", "Cricket", "Fashion", "Tech", "Music", "Lifestyle"];
@@ -352,7 +352,6 @@ function FindInfluencers() {
                   followers={inf.totalFollowers >= 1000 ? `${(inf.totalFollowers / 1000).toFixed(0)}K` : String(inf.totalFollowers)}
                   engagement={`${inf.avgEngagementRate.toFixed(1)}%`}
                   trustScore={inf.trustScore}
-                  systemCategory={inf.systemCategory}
                   onContact={() => {
                     setContactEmail("");
                     setContactModal({

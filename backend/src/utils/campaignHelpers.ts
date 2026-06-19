@@ -17,3 +17,14 @@ export function addInfluencerToCampaign(
   }
   return [...selectedInfluencers, influencerId];
 }
+
+export function calculateCampaignProgress(startDate: Date | string, endDate: Date | string): number {
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const now = Date.now();
+  if (now < start) return 0;
+  if (now > end) return 100;
+  const duration = end - start;
+  if (duration <= 0) return 0;
+  return Math.round(((now - start) / duration) * 100);
+}

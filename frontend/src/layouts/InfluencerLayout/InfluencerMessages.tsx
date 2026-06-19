@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { messageApi, type Conversation, type Message } from "../../api/outreachApi";
 import { mergeMessagesById } from "../../utils/messageMerge";
@@ -40,6 +40,17 @@ function InfluencerMessages() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   const loadConversations = useCallback(async () => {
     try {
       setLoading(true);
@@ -80,6 +91,7 @@ function InfluencerMessages() {
   useEffect(() => {
     if (!activeId) return;
     const interval = setInterval(() => {
+      if (sendingRef.current) return;
       refreshMessages(activeId);
       messageApi.getConversations().then(setConversations).catch(console.error);
     }, 5000);
@@ -107,22 +119,60 @@ function InfluencerMessages() {
   });
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !activeId || sending) return;
+    if (!newMessage.trim() || !activeId || sendingRef.current) return;
     if (directChat && !otherParticipant?._id) {
       setError("Cannot send — brand contact missing.");
       return;
     }
 
+    const content = newMessage.trim();
+    setNewMessage("");
+    sendingRef.current = true;
     setSending(true);
     setError("");
+
+    // Create optimistic user message
+    const tempUserMsg: Message = {
+      _id: `temp-user-${Date.now()}`,
+      content: content,
+      messageType: directChat ? "direct" : "assistant_query",
+      sender: {
+        _id: user?._id || "",
+        name: user?.name || "Me",
+        role: "influencer",
+      },
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    // If talking to assistant, also add an optimistic "typing" assistant message
+    const tempAssistantMsg: Message = {
+      _id: `temp-assistant-typing`,
+      content: "...",
+      messageType: "assistant_reply",
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => {
+      const base = [...prev, tempUserMsg];
+      if (!directChat) {
+        base.push(tempAssistantMsg);
+      }
+      return base;
+    });
+
     try {
       if (directChat && otherParticipant?._id) {
         const msg = await messageApi.send(
           otherParticipant._id,
-          newMessage.trim(),
+          content,
           campaignId
         );
-        setMessages((prev) => mergeMessagesById(prev, [msg]));
+        setMessages((prev) => {
+          const base = prev.filter((m) => !m._id.startsWith("temp-"));
+          return mergeMessagesById(base, [msg]);
+        });
         setConversations((prev) =>
           prev.map((c) =>
             c._id === activeId
@@ -138,10 +188,13 @@ function InfluencerMessages() {
       } else {
         const { userMessage, assistantMessage } = await messageApi.askAssistant(
           activeId,
-          newMessage.trim()
+          content
         );
         const nowDirect = assistantMessage.messageType === "interest_handoff";
-        setMessages((prev) => mergeMessagesById(prev, [userMessage, assistantMessage]));
+        setMessages((prev) => {
+          const base = prev.filter((m) => !m._id.startsWith("temp-"));
+          return mergeMessagesById(base, [userMessage, assistantMessage]);
+        });
         setConversations((prev) =>
           prev.map((c) =>
             c._id === activeId
@@ -156,10 +209,11 @@ function InfluencerMessages() {
         );
       }
       window.dispatchEvent(new Event("messages_updated"));
-      setNewMessage("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
+      setMessages((prev) => prev.filter((m) => !m._id.startsWith("temp-")));
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
@@ -332,7 +386,15 @@ function InfluencerMessages() {
                             </div>
                           )}
                           <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                            {msg.content}
+                            {msg.content === "..." ? (
+                              <span className="flex gap-1.5 items-center py-1">
+                                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse" />
+                                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse [animation-delay:0.2s]" />
+                                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse [animation-delay:0.4s]" />
+                              </span>
+                            ) : (
+                              msg.content
+                            )}
                           </p>
                           <div
                             className={`text-xs mt-1 ${
@@ -346,6 +408,7 @@ function InfluencerMessages() {
                     );
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               <div className="p-4 border-t border-gray-100">

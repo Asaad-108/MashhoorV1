@@ -5,6 +5,7 @@ import { Outreach } from "../models/Outreach";
 import { AppError } from "../middleware/errorHandler";
 import { AuthRequest } from "../types";
 import { inviteInfluencerToCampaign } from "../services/campaignInviteService";
+import { calculateCampaignProgress } from "../utils/campaignHelpers";
 
 // GET /api/campaigns  (business sees their own)
 export const getMyCampaigns = async (
@@ -30,9 +31,22 @@ export const getMyCampaigns = async (
       Campaign.countDocuments(filter),
     ]);
 
+    const updatedCampaigns = await Promise.all(
+      campaigns.map(async (c) => {
+        if (c.timeline && c.timeline.startDate && c.timeline.endDate) {
+          const progress = calculateCampaignProgress(c.timeline.startDate, c.timeline.endDate);
+          if (c.progress !== progress) {
+            c.progress = progress;
+            await Campaign.updateOne({ _id: c._id }, { $set: { progress } });
+          }
+        }
+        return c;
+      })
+    );
+
     res.status(200).json({
       success: true,
-      data: campaigns,
+      data: updatedCampaigns,
       pagination: { total, page: pageNum, limit: limitNum, pages: Math.ceil(total / limitNum) },
     });
   } catch (err) {
@@ -52,6 +66,14 @@ export const getCampaignById = async (
       "name email avatar"
     );
     if (!campaign) return next(new AppError("Campaign not found", 404));
+
+    if (campaign.timeline && campaign.timeline.startDate && campaign.timeline.endDate) {
+      const progress = calculateCampaignProgress(campaign.timeline.startDate, campaign.timeline.endDate);
+      if (campaign.progress !== progress) {
+        campaign.progress = progress;
+        await Campaign.updateOne({ _id: campaign._id }, { $set: { progress } });
+      }
+    }
 
     // Business can only see their own; influencers see campaigns they're selected for
     const userId = req.user?.userId;
@@ -92,6 +114,32 @@ export const createCampaign = async (
 
     if (!title || !description || !niche || !budget || !timeline) {
       return next(new AppError("title, description, niche, budget, and timeline are required", 400));
+    }
+
+    if (!timeline.startDate || !timeline.endDate) {
+      return next(new AppError("startDate and endDate are required in timeline", 400));
+    }
+
+    const parseDateString = (dateStr: string) => {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    };
+
+    const start = parseDateString(timeline.startDate);
+    const end = parseDateString(timeline.endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (start < today) {
+      return next(new AppError("Start date must be today or in the future", 400));
+    }
+
+    if (start.getTime() === end.getTime()) {
+      return next(new AppError("End date cannot be the same as the start date", 400));
+    }
+
+    if (end < start) {
+      return next(new AppError("End date must be after the start date", 400));
     }
 
     const userId = req.user?.userId;
@@ -138,6 +186,30 @@ export const updateCampaign = async (
 
     if (campaign.status === "completed" || campaign.status === "cancelled") {
       return next(new AppError("Cannot edit a completed or cancelled campaign", 400));
+    }
+
+    if (req.body.timeline) {
+      const { startDate, endDate } = req.body.timeline;
+      if (startDate && endDate) {
+        const parseDateString = (dateStr: string) => {
+          const [year, month, day] = dateStr.split("-").map(Number);
+          return new Date(year, month - 1, day);
+        };
+        const start = parseDateString(startDate);
+        const end = parseDateString(endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (start < today) {
+          return next(new AppError("Start date must be today or in the future", 400));
+        }
+        if (start.getTime() === end.getTime()) {
+          return next(new AppError("End date cannot be the same as the start date", 400));
+        }
+        if (end < start) {
+          return next(new AppError("End date must be after the start date", 400));
+        }
+      }
     }
 
     const allowedFields = [
@@ -237,7 +309,20 @@ export const getInfluencerCampaigns = async (
       .populate("business", "name email avatar")
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ success: true, data: campaigns });
+    const updatedCampaigns = await Promise.all(
+      campaigns.map(async (c) => {
+        if (c.timeline && c.timeline.startDate && c.timeline.endDate) {
+          const progress = calculateCampaignProgress(c.timeline.startDate, c.timeline.endDate);
+          if (c.progress !== progress) {
+            c.progress = progress;
+            await Campaign.updateOne({ _id: c._id }, { $set: { progress } });
+          }
+        }
+        return c;
+      })
+    );
+
+    res.status(200).json({ success: true, data: updatedCampaigns });
   } catch (err) {
     next(err);
   }

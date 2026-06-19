@@ -361,3 +361,74 @@ export const resetPassword = async (
     next(err);
   }
 };
+
+// PUT /api/auth/change-password
+export const changePassword = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return next(new AppError("Current password and new password are required", 400));
+    }
+    if (String(newPassword).length < 8) {
+      return next(new AppError("New password must be at least 8 characters", 400));
+    }
+
+    const user = await User.findById(req.user?.userId).select("+password");
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return next(new AppError("Incorrect current password", 401));
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// DELETE /api/auth/account
+export const deleteAccount = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return next(new AppError("User not authenticated", 401));
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
+    // If influencer, delete profile too
+    if (user.role === "influencer") {
+      await InfluencerProfile.deleteOne({ user: userId });
+    }
+
+    // Delete user document
+    await User.deleteOne({ _id: userId });
+
+    res.status(200).json({
+      success: true,
+      message: "Account permanently deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};

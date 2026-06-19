@@ -26,7 +26,7 @@ export const ALLOWED_INSTAGRAM_HANDLES = [
   "haniaheheofficial", "mahirahkhan", "ayezakhan.ak", "official_mayaali",
   "sajalaly", "mawrellous", "yumnazaidiofficial", "wahaj.official",
   "bilalabbas_khan", "danishtaimoor16", "muneeb_butt", "iiqraaziz",
-  "farhan_saeed", "ferozekhan", "duckybhai", "rajab.butt94", "sistrology___",
+  "farhan_saeed", "ferozekhan", "duckybhai", "rajab.butt94",
   "shahveerjay", "umarkhan", "zaidalit", "wildlensbyabrar", "inkleftunsaid"
 ];
 
