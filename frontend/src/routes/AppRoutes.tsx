@@ -63,7 +63,7 @@ export function AppRoutes() {
           <Route path="/signup" element={<SignUp />} />
           <Route path="/reset" element={<Reset />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/Admin-login" element={<AdminLogin />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
         </Route>
 
         {/* Business Routes — protected */}
