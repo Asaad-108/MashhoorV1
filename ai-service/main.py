@@ -31,6 +31,14 @@ class ChatResponse(BaseModel):
     trace: str | None = None
 
 
+@app.on_event("startup")
+def startup_event():
+    print("INFO: Pre-loading Mashhoor Campaign Assistant models...")
+    assistant = get_assistant()
+    assistant.load()
+    print("INFO: Mashhoor Campaign Assistant models pre-loaded and ready!")
+
+
 @app.get("/api/health")
 def health():
     return {"success": True, "service": "mashhoor-ai"}
